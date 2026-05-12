@@ -1,0 +1,14 @@
+build_map.py
+requirements.txt
+__pycache__/
+.bkit/
+*.xlsx
+*.xls
+schools.geojson
+경계데이터/
+*.shp
+*.dbf
+*.shx
+*.prj
+*.log
+vworld_api_key.txt
