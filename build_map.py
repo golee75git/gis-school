@@ -94,6 +94,28 @@ def row_to_feature(header: list[str], row: tuple) -> dict | None:
     }
 
 
+def feature_dedupe_key(feature: dict) -> tuple:
+    props = feature.get("properties") or {}
+    school_id = props.get("학교ID")
+    if school_id not in (None, ""):
+        return ("id", str(school_id).strip())
+    lon, lat = feature["geometry"]["coordinates"]
+    name = str(props.get("학교명") or "").strip()
+    return ("place", name, round(float(lat), 6), round(float(lon), 6))
+
+
+def dedupe_features(features: list[dict]) -> list[dict]:
+    seen: set[tuple] = set()
+    deduped: list[dict] = []
+    for feature in features:
+        key = feature_dedupe_key(feature)
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(feature)
+    return deduped
+
+
 def build_geojson(path: Path) -> dict:
     wb = load_workbook(path, read_only=True, data_only=True)
     ws = wb.active
@@ -107,7 +129,7 @@ def build_geojson(path: Path) -> dict:
         if f:
             features.append(f)
     wb.close()
-    return {"type": "FeatureCollection", "features": features}
+    return {"type": "FeatureCollection", "features": dedupe_features(features)}
 
 
 # 남한(본토·제주·주요 도서)을 한 화면에 담기 위한 근사 범위.
