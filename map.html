@@ -1,0 +1,1345 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>강릉시 학교 위치</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <style>
+    :root {
+      --ink: #0f172a;
+      --ink-soft: #334155;
+      --ink-muted: #64748b;
+      --surface: rgba(255, 255, 255, 0.78);
+      --surface-strong: rgba(255, 255, 255, 0.94);
+      --line: rgba(148, 163, 184, 0.28);
+      --glow: rgba(99, 102, 241, 0.16);
+      --shadow-xl: 0 28px 70px -32px rgba(15, 23, 42, 0.55);
+      --shadow-lg: 0 18px 44px -20px rgba(15, 23, 42, 0.28);
+      --shadow-md: 0 10px 28px -14px rgba(15, 23, 42, 0.18);
+      --radius-xl: 24px;
+      --radius-lg: 16px;
+      --radius-md: 12px;
+      --tier-kinder: #f97316;
+      --tier-elm: #5b6eef;
+      --tier-mid: #14b8a6;
+      --tier-high: #e11d48;
+      --tier-special: #8b5cf6;
+    }
+    * { box-sizing: border-box; }
+    html {
+      height: 100%;
+      font-family: "Noto Sans KR", "Segoe UI", system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    body {
+      height: 100%; margin: 0;
+      padding: clamp(12px, 2.5vw, 22px);
+      font-family: inherit;
+      color: var(--ink);
+      background-color: #dbe4ee;
+      background-image:
+        radial-gradient(ellipse 90% 70% at 12% 0%, rgba(99, 102, 241, 0.22), transparent 58%),
+        radial-gradient(ellipse 70% 55% at 100% 8%, rgba(20, 184, 166, 0.16), transparent 52%),
+        radial-gradient(ellipse 60% 50% at 50% 100%, rgba(244, 63, 94, 0.08), transparent 55%),
+        linear-gradient(165deg, #c9d4e3 0%, #dde5ef 38%, #edf1f7 72%, #f8fafc 100%);
+      background-attachment: fixed;
+    }
+    .map-shell {
+      position: fixed;
+      inset: clamp(12px, 2.5vw, 22px);
+      border-radius: var(--radius-xl);
+      overflow: hidden;
+      z-index: 0;
+      background: #d7dee8;
+      box-shadow:
+        0 0 0 1px rgba(255, 255, 255, 0.55) inset,
+        var(--shadow-xl),
+        var(--shadow-md);
+    }
+    .map-shell::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 650;
+      border-radius: inherit;
+      box-shadow:
+        inset 0 0 0 1px rgba(255, 255, 255, 0.28),
+        inset 0 -28px 48px -24px rgba(15, 23, 42, 0.12);
+    }
+    #map {
+      height: 100%; width: 100%;
+      background: linear-gradient(180deg, #e8edf4 0%, #d5dde8 100%);
+    }
+    .leaflet-container {
+      font-family: inherit;
+      background: #d5dde8;
+    }
+    .leaflet-tile-pane.tile-tune-map {
+      filter: saturate(0.9) contrast(1.05) brightness(1.03) hue-rotate(-3deg);
+    }
+    .leaflet-top.leaflet-left {
+      top: auto !important;
+      bottom: clamp(16px, 3vw, 28px) !important;
+      left: clamp(16px, 3vw, 28px) !important;
+      margin: 0 !important;
+    }
+    .leaflet-bar {
+      border: none !important;
+      border-radius: var(--radius-md) !important;
+      overflow: hidden;
+      box-shadow: var(--shadow-md) !important;
+    }
+    .leaflet-bar a {
+      width: 36px !important; height: 36px !important; line-height: 36px !important;
+      font-size: 18px !important;
+      color: var(--ink-soft) !important;
+      border: none !important;
+      background: var(--surface-strong) !important;
+      transition: background 0.16s ease, color 0.16s ease;
+    }
+    .leaflet-bar a:hover { background: #fff !important; color: var(--ink) !important; }
+    .leaflet-bar a.leaflet-disabled { color: #cbd5e1 !important; }
+    .leaflet-control-zoom-in { border-bottom: 1px solid var(--line) !important; }
+    .leaflet-control-attribution {
+      background: var(--surface) !important;
+      backdrop-filter: blur(14px) saturate(1.25);
+      -webkit-backdrop-filter: blur(14px) saturate(1.25);
+      color: var(--ink-muted) !important;
+      font-size: 10px !important;
+      padding: 5px 11px 6px !important;
+      margin: 10px !important;
+      border-radius: 999px !important;
+      border: 1px solid rgba(255, 255, 255, 0.72) !important;
+      box-shadow: var(--shadow-md) !important;
+      max-width: calc(100% - 24px);
+    }
+    .leaflet-control-attribution a { color: #4f46e5 !important; font-weight: 600; }
+    .leaflet-popup.school-popup-card .leaflet-popup-content-wrapper {
+      border-radius: var(--radius-lg);
+      background: var(--surface-strong);
+      backdrop-filter: blur(16px) saturate(1.3);
+      -webkit-backdrop-filter: blur(16px) saturate(1.3);
+      box-shadow: var(--shadow-lg);
+      border: 1px solid rgba(255, 255, 255, 0.88);
+      overflow: hidden;
+    }
+    .leaflet-popup.school-popup-card .leaflet-popup-content {
+      margin: 16px 18px;
+      font-size: 13px;
+      line-height: 1.65;
+      color: var(--ink-soft);
+    }
+    .leaflet-popup.school-popup-card .leaflet-popup-content b {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 14px;
+      color: var(--ink);
+    }
+    .leaflet-popup.school-popup-card .leaflet-popup-tip {
+      box-shadow: none;
+      background: var(--surface-strong);
+    }
+    .leaflet-popup-content-wrapper {
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-lg);
+      border: 1px solid rgba(255, 255, 255, 0.88);
+      overflow: hidden;
+    }
+    .leaflet-popup-content { margin: 14px 18px; font-size: 13px; line-height: 1.6; color: var(--ink-soft); }
+    .leaflet-popup-tip { box-shadow: none; }
+    .leaflet-popup-close-button {
+      width: 32px !important; height: 32px !important;
+      padding: 8px !important; font-size: 18px !important;
+      color: #94a3b8 !important;
+    }
+    .leaflet-popup-close-button:hover { color: var(--ink-muted) !important; }
+    .panel {
+      position: absolute; z-index: 1000;
+      top: clamp(22px, 4vw, 36px);
+      left: clamp(58px, 8vw, 76px);
+      padding: 18px 20px 16px;
+      border-radius: var(--radius-lg);
+      max-width: min(400px, calc(100vw - 32px));
+      font-size: 13px;
+      background: var(--surface);
+      backdrop-filter: blur(18px) saturate(1.45);
+      -webkit-backdrop-filter: blur(18px) saturate(1.45);
+      border: 1px solid rgba(255, 255, 255, 0.82);
+      box-shadow:
+        0 0 0 1px rgba(148, 163, 184, 0.14),
+        var(--shadow-lg);
+    }
+    .panel::before {
+      content: "";
+      position: absolute;
+      top: 0; left: 18px; right: 18px; height: 3px;
+      border-radius: 0 0 8px 8px;
+      background: linear-gradient(90deg, #6366f1, #14b8a6, #f43f5e, #8b5cf6);
+      opacity: 0.95;
+    }
+    .panel-kicker {
+      margin: 2px 0 6px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #6366f1;
+    }
+    .panel h1 {
+      margin: 0 0 10px;
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.04em;
+      color: var(--ink);
+      line-height: 1.2;
+    }
+    .panel p { margin: 0; color: var(--ink-muted); line-height: 1.6; font-size: 12px; font-weight: 400; }
+    .legend {
+      margin-top: 14px;
+      display: flex; flex-wrap: wrap;
+      gap: 7px 8px;
+    }
+    .legend span.lg {
+      display: inline-flex; align-items: center; gap: 7px;
+      font-size: 11px; font-weight: 600;
+      color: var(--ink-soft);
+      padding: 6px 11px 6px 8px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.66);
+      border: 1px solid rgba(255, 255, 255, 0.9);
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+    }
+    .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.95), 0 1px 4px rgba(15, 23, 42, 0.18);
+    }
+    .leaflet-tooltip.school-label {
+      border-radius: 999px;
+      padding: var(--school-label-pad-v, 2px) var(--school-label-pad-h, 6px);
+      font-size: var(--school-label-fs, 12px);
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      line-height: 1.25;
+      box-shadow: 0 6px 18px rgba(15, 23, 42, 0.14), 0 1px 2px rgba(15, 23, 42, 0.08);
+      pointer-events: none;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+    }
+    .leaflet-tooltip.school-label.school-label-elm {
+      background: rgba(238, 242, 255, 0.94);
+      color: #1e3a8a;
+      border: 1px solid rgba(91, 110, 239, 0.34);
+    }
+    .leaflet-tooltip.school-label.school-label-mid {
+      background: rgba(236, 253, 245, 0.94);
+      color: #115e59;
+      border: 1px solid rgba(20, 184, 166, 0.34);
+    }
+    .leaflet-tooltip.school-label.school-label-high {
+      background: rgba(255, 241, 242, 0.94);
+      color: #9f1239;
+      border: 1px solid rgba(225, 29, 72, 0.32);
+    }
+    .leaflet-tooltip.school-label.school-label-kinder {
+      background: rgba(255, 247, 237, 0.94);
+      color: #9a3412;
+      border: 1px solid rgba(249, 115, 22, 0.34);
+    }
+    .leaflet-tooltip.school-label.school-label-special {
+      background: rgba(245, 243, 255, 0.94);
+      color: #5b21b6;
+      border: 1px solid rgba(139, 92, 246, 0.34);
+    }
+    .leaflet-tooltip.school-label.school-label-other {
+      background: rgba(248, 250, 252, 0.94);
+      color: var(--ink-soft);
+      border: 1px solid var(--line);
+    }
+    .leaflet-tooltip.school-label::before { display: none; }
+    .school-label-lines {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      overflow: visible;
+    }
+    .school-label-line {
+      stroke: rgba(51, 65, 85, 0.58);
+      stroke-width: 1.25;
+      fill: none;
+      stroke-linecap: round;
+    }
+    .school-name-rail {
+      position: absolute;
+      top: clamp(8px, 1.5vw, 14px);
+      right: clamp(8px, 1.5vw, 14px);
+      bottom: clamp(52px, 10vh, 72px);
+      width: max-content;
+      max-width: calc(100% - 16px);
+      min-width: 200px;
+      max-height: calc(100% - 16px);
+      z-index: 1001;
+      pointer-events: auto;
+      --rail-scale: 1;
+      display: flex;
+      flex-direction: column;
+    }
+    .school-name-rail--docked {
+      bottom: auto !important;
+      right: auto !important;
+    }
+    .school-name-rail--sized {
+      bottom: auto !important;
+      width: auto;
+      max-width: calc(100% - 16px);
+    }
+    .school-name-rail--dragging,
+    .school-name-rail--resizing {
+      user-select: none;
+    }
+    .school-name-rail-drag {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 2;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      height: calc(24px * var(--rail-scale, 1));
+      margin: 0;
+      padding: 0;
+      border: none;
+      border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+      background: rgba(255, 255, 255, 0.42);
+      color: var(--ink-muted);
+      font-family: inherit;
+      font-size: calc(10px * var(--rail-scale, 1));
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      cursor: grab;
+      touch-action: none;
+    }
+    .school-name-rail-drag::before {
+      content: "";
+      width: 28px;
+      height: 4px;
+      border-radius: 99px;
+      background: linear-gradient(90deg, #cbd5e1 0%, #94a3b8 50%, #cbd5e1 100%);
+    }
+    .school-name-rail-drag:hover {
+      color: var(--ink-soft);
+      background: rgba(255, 255, 255, 0.58);
+    }
+    .school-name-rail--dragging .school-name-rail-drag,
+    .school-name-rail-drag:active {
+      cursor: grabbing;
+    }
+    .school-name-rail-inner {
+      flex: 1 1 auto;
+      min-height: 0;
+      max-height: 100%;
+      width: 100%;
+      overflow: hidden;
+      padding:
+        calc(30px * var(--rail-scale, 1))
+        calc(14px * var(--rail-scale, 1))
+        calc(12px * var(--rail-scale, 1));
+      border-radius: var(--radius-lg);
+      background: var(--surface);
+      backdrop-filter: blur(16px) saturate(1.35);
+      -webkit-backdrop-filter: blur(16px) saturate(1.35);
+      border: 1px solid rgba(255, 255, 255, 0.82);
+      box-shadow:
+        0 0 0 1px rgba(148, 163, 184, 0.12),
+        var(--shadow-lg);
+    }
+    .school-name-rail-resize {
+      position: absolute;
+      right: 2px;
+      bottom: 2px;
+      z-index: 3;
+      width: calc(18px * var(--rail-scale, 1));
+      height: calc(18px * var(--rail-scale, 1));
+      margin: 0;
+      padding: 0;
+      border: none;
+      border-radius: 6px 0 var(--radius-lg) 0;
+      background: rgba(255, 255, 255, 0.72);
+      color: var(--ink-muted);
+      cursor: nwse-resize;
+      touch-action: none;
+    }
+    .school-name-rail-resize::before {
+      content: "";
+      position: absolute;
+      right: 4px;
+      bottom: 4px;
+      width: 8px;
+      height: 8px;
+      border-right: 2px solid currentColor;
+      border-bottom: 2px solid currentColor;
+      opacity: 0.72;
+    }
+    .school-name-rail-resize:hover {
+      color: var(--ink-soft);
+      background: rgba(255, 255, 255, 0.92);
+    }
+    .school-name-rail--resizing .school-name-rail-resize,
+    .school-name-rail-resize:active {
+      cursor: nwse-resize;
+    }
+    .sn-section { margin-bottom: calc(14px * var(--rail-scale, 1)); }
+    .sn-section:last-child { margin-bottom: 0; }
+    .sn-h {
+      margin: 0 0 6px;
+      padding-left: 9px;
+      border-left: 3px solid #94a3b8;
+      font-size: calc(11px * var(--rail-scale, 1));
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: var(--ink-muted);
+    }
+    .sn-kinder .sn-h { border-left-color: #ea580c; color: #c2410c; }
+    .sn-elm .sn-h { border-left-color: #4f6bed; color: #1d4ed8; }
+    .sn-mid .sn-h { border-left-color: #0d9488; color: #0f766e; }
+    .sn-high .sn-h { border-left-color: #c0264a; color: #9f1239; }
+    .sn-special .sn-h { border-left-color: #7c3aed; color: #6d28d9; }
+    .sn-flow {
+      display: grid;
+      grid-auto-flow: column;
+      grid-auto-columns: minmax(calc(56px * var(--rail-scale, 1)), max-content);
+      gap: calc(4px * var(--rail-scale, 1)) calc(6px * var(--rail-scale, 1));
+      margin: 0;
+      width: max-content;
+    }
+    .sn-kinder .sn-flow { grid-template-rows: repeat(1, auto); }
+    .sn-elm .sn-flow { grid-template-rows: repeat(4, auto); }
+    .sn-mid .sn-flow { grid-template-rows: repeat(2, auto); }
+    .sn-high .sn-flow { grid-template-rows: repeat(2, auto); }
+    .sn-special .sn-flow { grid-template-rows: repeat(1, auto); }
+    .sn-chip {
+      display: block;
+      min-width: 0;
+      font-size: calc(10px * var(--rail-scale, 1));
+      font-weight: 700;
+      line-height: 1.25;
+      letter-spacing: -0.03em;
+      color: var(--ink-soft);
+      text-align: center;
+      padding:
+        calc(5px * var(--rail-scale, 1))
+        calc(4px * var(--rail-scale, 1));
+      border-radius: calc(8px * var(--rail-scale, 1));
+      background: rgba(255, 255, 255, 0.72);
+      border: 1px solid rgba(255, 255, 255, 0.92);
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+      word-break: keep-all;
+      overflow-wrap: anywhere;
+      transition: transform 0.14s ease, box-shadow 0.14s ease, background 0.14s ease;
+    }
+    .sn-chip:hover {
+      transform: translateY(-1px);
+      background: rgba(255, 255, 255, 0.96);
+      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+    }
+    .sn-kinder .sn-chip { border-color: rgba(234, 88, 12, 0.28); }
+    .sn-elm .sn-chip { border-color: rgba(79, 107, 237, 0.28); }
+    .sn-mid .sn-chip { border-color: rgba(13, 148, 136, 0.28); }
+    .sn-high .sn-chip { border-color: rgba(192, 38, 74, 0.28); }
+    .sn-special .sn-chip { border-color: rgba(124, 58, 237, 0.28); }
+    /* PNG 저장 직전에만 .map-shell에 붙음: 리스트 한 화면·촘촘히 */
+    .map-shell--png-capture .school-name-rail {
+      top: 6px;
+      right: 6px;
+      bottom: 6px;
+      width: max-content;
+      max-width: calc(100% - 12px);
+      min-width: 100px;
+      overflow: visible;
+    }
+    .map-shell--png-capture .school-name-rail-inner {
+      max-height: none !important;
+      overflow: visible;
+      padding: 5px 6px 6px;
+      border-radius: 10px;
+    }
+    .map-shell--png-capture .sn-flow {
+      grid-auto-flow: column;
+      grid-auto-columns: minmax(36px, max-content);
+      gap: 2px 3px;
+      width: max-content;
+      max-width: none;
+    }
+    .map-shell--png-capture .sn-kinder .sn-flow { grid-template-rows: repeat(1, auto); }
+    .map-shell--png-capture .sn-elm .sn-flow { grid-template-rows: repeat(4, auto); }
+    .map-shell--png-capture .sn-mid .sn-flow { grid-template-rows: repeat(2, auto); }
+    .map-shell--png-capture .sn-high .sn-flow { grid-template-rows: repeat(2, auto); }
+    .map-shell--png-capture .sn-special .sn-flow { grid-template-rows: repeat(1, auto); }
+    .map-shell--png-capture .sn-chip {
+      font-size: 7px;
+      font-weight: 700;
+      padding: 2px 1px;
+      line-height: 1.12;
+      border-radius: 4px;
+    }
+    .map-shell--png-capture .sn-h {
+      font-size: 7px;
+      margin: 0 0 2px;
+      padding-left: 5px;
+      border-left-width: 2px;
+    }
+    .map-shell--png-capture .sn-section { margin-bottom: 4px; }
+    .save-row { margin-top: 14px; }
+    .btn-save {
+      width: 100%;
+      cursor: pointer;
+      border: none;
+      border-radius: var(--radius-md);
+      padding: 11px 14px;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: #fff;
+      background: linear-gradient(135deg, #4f46e5 0%, #6366f1 42%, #0d9488 100%);
+      box-shadow: 0 8px 22px rgba(79, 70, 229, 0.28);
+      transition: transform 0.14s ease, box-shadow 0.14s ease, filter 0.14s ease;
+    }
+    .btn-save:hover:not(:disabled) {
+      transform: translateY(-1px);
+      filter: brightness(1.03);
+      box-shadow: 0 12px 28px rgba(79, 70, 229, 0.34);
+    }
+    .btn-save:disabled {
+      cursor: wait;
+      opacity: 0.75;
+    }
+  </style>
+</head>
+<body>
+  <div class="map-shell">
+    <div id="map"></div>
+    <aside class="school-name-rail" aria-label="학교명 목록">
+      <button type="button" class="school-name-rail-drag" aria-label="학교명 목록 이동" title="드래그하여 이동">이동</button>
+      <div class="school-name-rail-inner">
+        <section class="sn-section sn-kinder">
+          <h2 class="sn-h">유치원</h2>
+          <div class="sn-flow" id="sn-list-kinder"></div>
+        </section>
+        <section class="sn-section sn-elm">
+          <h2 class="sn-h">초등학교</h2>
+          <div class="sn-flow" id="sn-list-elm"></div>
+        </section>
+        <section class="sn-section sn-mid">
+          <h2 class="sn-h">중학교</h2>
+          <div class="sn-flow" id="sn-list-mid"></div>
+        </section>
+        <section class="sn-section sn-high">
+          <h2 class="sn-h">고등학교</h2>
+          <div class="sn-flow" id="sn-list-high"></div>
+        </section>
+        <section class="sn-section sn-special">
+          <h2 class="sn-h">특수학교</h2>
+          <div class="sn-flow" id="sn-list-special"></div>
+        </section>
+      </div>
+      <button type="button" class="school-name-rail-resize" aria-label="학교명 목록 크기 조절" title="드래그하여 크기 조절"></button>
+    </aside>
+  </div>
+  <div class="panel">
+    <p class="panel-kicker">강릉 교육기관</p>
+    <h1>강릉시 학교 위치</h1>
+    <p id="meta"></p>
+    <div class="legend">
+      <span class="lg"><i class="dot" style="background:#f97316"></i>유치원</span>
+      <span class="lg"><i class="dot" style="background:#5b6eef"></i>초등</span>
+      <span class="lg"><i class="dot" style="background:#14b8a6"></i>중등</span>
+      <span class="lg"><i class="dot" style="background:#e11d48"></i>고등</span>
+      <span class="lg"><i class="dot" style="background:#8b5cf6"></i>특수</span>
+    </div>
+    <div class="save-row">
+      <button type="button" class="btn-save" id="btnSavePng" title="지도 영역을 고해상도 PNG로 저장합니다">
+        이미지 저장 (고해상도)
+      </button>
+    </div>
+  </div>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script>
+  const GEO = {"type": "FeatureCollection", "features": [{"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.880885, 37.770103]}, "properties": {"학교명": "경포유치원", "학교급구분": "유치원", "시도교육청명": "강원특별자치도교육청", "교육지원청명": "강원특별자치도강릉교육지원청"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.88803, 37.751568]}, "properties": {"학교명": "늘해랑유치원", "학교급구분": "유치원", "시도교육청명": "강원특별자치도교육청", "교육지원청명": "강원특별자치도강릉교육지원청"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.914273, 37.775546]}, "properties": {"학교명": "솔향유치원", "학교급구분": "유치원", "시도교육청명": "강원특별자치도교육청", "교육지원청명": "강원특별자치도강릉교육지원청"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.909901, 37.748232]}, "properties": {"학교명": "하슬라유치원", "학교급구분": "유치원", "시도교육청명": "강원특별자치도교육청", "교육지원청명": "강원특별자치도강릉교육지원청"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.9623406, 37.72474403]}, "properties": {"학교ID": "B000004937", "학교명": "강동초등학교", "학교급구분": "초등학교", "설립일자": "1932-02-10", "설립형태": "공립", "본교분교구분": "본교", "소재지지번주소": "강원특별자치도 강릉시 강동면 모전리 384", "소재지도로명주소": "강원특별자치도 강릉시 강동면 단경로 20", "시도교육청코드": 7801000, "시도교육청명": "강원특별자치도교육청", "교육지원청명": "강원특별자치도강릉교육지원청", "생성일자": "2013-11-29", "변경일자": "2025-10-25", "데이터기준일자": "2026-03-20", "제공기관코드": "B554398", "제공기관명": "한국교육시설안전원"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.887751, 37.75367806]}, "properties": {"학교ID": "B000004928", "학교명": "강릉초등학교", "학교급구분": "초등학교", "설립일자": "1896-09-17", "설립형태": "공립", "본교분교구분": "본교", "소재지지번주소": "강원특별자치도 강릉시 홍제동 38", "소재지도로명주소": "강원특별자치도 강릉시 토성로 103", "시도교육청코드": 7801000, "시도교육청명": "강원특별자치도교육청", "교육지원청명": "강원특별자치도강릉교육지원청", "생성일자": "2013-11-29", "변경일자": "2025-10-25", "데이터기준일자": "2026-03-20", "제공기관코드": "B554398", "제공기관명": "한국교육시설안전원"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.9001388, 37.80485771]}, "properties": {"학교ID": "B000004917", "학교명": "경포대초등학교", "학교급구분": "초등학교", "설립일자": "1968-03-25", "설립형태": "공립", "본교분교구분": "본교", "소재지지번주소": "강원특별자치도 강릉시 안현동 106-6", "소재지도로명주소": "강원특별자치도 강릉시 경포로475번길 23-11", "시도교육청코드": 7801000, "시도교육청명": "강원특별자치도교육청", "교육지원청명": "강원특별자치도강릉교육지원청", "생성일자": "2013-11-29", "변경일자": "2025-10-25", "데이터기준일자": "2026-03-20", "제공기관코드": "B554398", "제공기관명": "한국교육시설안전원"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.8798575, 37.77000657]}, "properties": {"학교ID": "B000004919", "학교명": "경포초등학교", "학교급구분": "초등학교", "설립일자": "1932-05-05", "설립형태": "공립", "본교분교구분": "본교", "소재지지번주소": "강원특별자치도 강릉시 교동 1797", "소재지도로명주소": "강원특별자치도 강릉시 솔올로 90", "시도교육청코드": 7801000, "시도교육청명": "강원특별자치도교육청", "교육지원청명": "강원특별자치도강릉교육지원청", "생성일자": "2013-11-29", "변경일자": "2025-10-25", "데이터기준일자": "2026-03-20", "제공기관코드": "B554398", "제공기관명": "한국교육시설안전원"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.8935846, 37.76730824]}, "properties": {"학교ID": "B000004918", "학교명": "교동초등학교", "학교급구분": "초등학교", "설립일자": "1971-10-11", "설립형태": "공립", "본교분교구분": "본교", "소재지지번주소": "강원특별자치도 강릉시 교동 310-1", "소재지도로명주소": "강원특별자치도 강릉시 율곡로2968번길 10", "시도교육청코드": 7801000, "시도교육청명": "강원특별자치도교육청", "교육지원청명": "강원특별자치도강릉교육지원청", "생성일자": "2013-11-29", "변경일자": "2025-10-25", "데이터기준일자": "2026-03-20", "제공기관코드": "B554398", "제공기관명": "한국교육시설안전원"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.8913615, 37.71771534]}, "properties": {"학교ID": "B000004935", "학교명": "구정초등학교", "학교급구분": "초등학교", "설립일자": "1936-10-01", "설립형태": "공립", "본교분교구분": "본교", "소재지지번주소": "강원특별자치도 강릉시 구정면 학산리 317", "소재지도로명주소": "강원특별자치도 강릉시 구정면 범일로 266-14", "시도교육청코드": 7801000, "시도교육청명": "강원특별자치도교육청", "교육지원청명": "강원특별자치도강릉교육지원청", "생성일자": "2013-11-29", "변경일자": "2025-10-25", "데이터기준일자": "2026-03-20", "제공기관코드": "B554398", "제공기관명": "한국교육시설안전원"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.9135547, 37.70388258]}, "properties": {"학교ID": "B000004936", "학교명": "금광초등학교", "학교급구분": "초등학교", "설립일자": "1944-06-24", "설립형태": "공립", "본교분교구분": "본교", "소재지지번주소": "강원특별자치도 강릉시 구정면 금광리 858-3", "소재지도로명주소": "강원특별자치도 강릉시 구정면 금평로 575", "시도교육청코드": 7801000, "시도교육청명": "강원특별자치도교육청", "교육지원청명": "강원특별자치도강릉교육지원청", "생성일자": "2013-11-29", "변경일자": "2025-10-25", "데이터기준일자": "2026-03-20", "제공기관코드": "B554398", "제공기관명": "한국교육시설안전원"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.9146306, 37.7670985]}, "properties": {"학교ID": "B000004927", "학교명": "남강초등학교", "학교급구분": "초등학교", "설립일자": "1987-03-01", "설립형태": "공립", "본교분교구분": "본교", "소재지지번주소": "강원특별자치도 강릉시 포남동 1278-117", "소재지도로명주소": "강원특별자치도 강릉시 경강로2310번길 7", "시도교육청코드": 7801000, "시도교육청명": "강원특별자치도교육청", "교육지원청명": "강원특별자치도강릉교육지원청", "생성일자": "2013-11-29", "변경일자": "2025-10-25", "데이터기준일자": "2026-03-20", "제공기관코드": "B554398", "제공기관명": "한국교육시설안전원"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.892106, 37.74449004]}, "properties": {"학교ID": "B000004922", "학교명": "남산초등학교", "학교급구분": "초등학교", "설립일자": "1983-04-20", "설립형태": "공립", "본교분교구분": "본교", "소재지지번주소": "강원특별자치도 강릉시 내곡동 125", "소재지도로명주소": "강원특별자치도 강릉시 남산초교길 33", "시도교육청코드": 7801000, "시도교육청명": "강원특별자치도교육청", "교육지원청명": "강원특별자치도강릉교육지원청", "생성일자": "2013-11-29", "변경일자": "2025-10-25", "데이터기준일자": "2026-03-20", "제공기관코드": "B554398", "제공기관명": "한국교육시설안전원"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.901541, 37.74082297]}, "properties": {"학교ID": "B000004923", "학교명": "노암초등학교", "학교급구분": "초등학교", "설립일자": "1979-03-15", "설립형태": "공립", "본교분교구분": "본교", "소재지지번주소": "강원특별자치도 강릉시 노암동 415-2", "소재지도로명주소": "강원특별자치도 강릉시 노암등길 71", "시도교육청코드": 7801000, "시도교육청명": "강원특별자치도교육청", "교육지원청명": "강원특별자치도강릉교육지원청", "생성일자": "2013-11-29", "변경일자": "2025-10-25", "데이터기준일자": "2026-03-20", "제공기관코드": "B554398", "제공기관명": "한국교육시설안전원"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.9287446, 37.77543116]}, "properties": {"학교ID": "B000004913", "학교명": "동명초등학교", "학교급구분": "초등학교", "설립일자": "1938-07-04", "설립형태": "공립", "본교분교구분": "본교", "소재지지번주소": "강원특별자치도 강릉시 송정동 168-1", "소재지도로명주소": "강원특별자치도 강릉시 경강로 2473", "시도교육청코드": 7801000, "시도교육청명": "강원특별자치도교육청", "교육지원청명": "강원특별자치도강릉교육지원청", "생성일자": "2013-11-29", "변경일자": "2025-10-25", "데이터기준일자": "2026-03-20", "제공기관코드": "B554398", "제공기관명": "한국교육시설안전원"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.8784692, 37.74277817]}, "properties": {"학교ID": "B000004914", "학교명": "명주초등학교", "학교급구분": "초등학교", "설립일자": "1946-03-06", "설립형태": "공립", "본교분교구분": "본교", "소재지지번주소": "강원특별자치도 강릉시 회산동 24", "소재지도로명주소": "강원특별자치도 강릉시 강변로 86-1", "시도교육청코드": 7801000, "시도교육청명": "강원특별자치도교육청", "교육지원청명": "강원특별자치도강릉교육지원청", "생성일자": "2013-11-29", "변경일자": "2025-10-25", "데이터기준일자": "2026-03-20", "제공기관코드": "B554398", "제공기관명": "한국교육시설안전원"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.9017805, 37.73184003]}, "properties": {"학교ID": "B000004915", "학교명": "모산초등학교", "학교급구분": "초등학교", "설립일자": "1941-09-28", "설립형태": "공립", "본교분교구분": "본교", "소재지지번주소": "강원특별자치도 강릉시 장현동 43-2", "소재지도로명주소": "강원특별자치도 강릉시 모산로224번길 3", "시도교육청코드": 7801000, "시도교육청명": "강원특별자치도교육청", "교육지원청명": "강원특별자치도강릉교육지원청", "생성일자": "2013-11-29", "변경일자": "2025-10-25", "데이터기준일자": "2026-03-20", "제공기관코드": "B554398", "제공기관명": "한국교육시설안전원"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.8505139, 37.82188867]}, "properties": {"학교ID": "B000004943", "학교명": "사천초등학교", "학교급구분": "초등학교", "설립일자": "1924-05-18", "설립형태": "공립", "본교분교구분": "본교", "소재지지번주소": "강원특별자치도 강릉시 사천면 미노리 406", "소재지도로명주소": "강원특별자치도 강릉시 사천면 미노길 46", "시도교육청코드": 7801000, "시도교육청명": "강원특별자치도교육청", "교육지원청명": "강원특별자치도강릉교육지원청", "생성일자": "2013-11-29", "변경일자": "2025-10-25", "데이터기준일자": "2026-03-20", "제공기관코드": "B554398", "제공기관명": "한국교육시설안전원"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.910547, 37.75644211]}, "properties": {"학교ID": "B000004925", "학교명": "성덕초등학교", "학교급구분": "초등학교", "설립일자": "1935-12-02", "설립형태": "공립", "본교분교구분": "본교", "소재지지번주소": "강원특별자치도 강릉시 입암동 625-1", "소재지도로명주소": "강원특별자치도 강릉시 용지로 60", "시도교육청코드": 7801000, "시도교육청명": "강원특별자치도교육청", "교육지원청명": "강원특별자치도강릉교육지원청", "생성일자": "2013-11-29", "변경일자": "2025-10-25", "데이터기준일자": "2026-03-20", "제공기관코드": "B554398", "제공기관명": "한국교육시설안전원"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.8337431, 37.71907111]}, "properties": {"학교ID": "B000004941", "학교명": "성산초등학교", "학교급구분": "초등학교", "설립일자": "1922-04-01", "설립형태": "공립", "본교분교구분": "본교", "소재지지번주소": "강원특별자치도 강릉시 성산면 구산리 154", "소재지도로명주소": "강원특별자치도 강릉시 성산면 구산길 15", "시도교육청코드": 7801000, "시도교육청명": "강원특별자치도교육청", "교육지원청명": "강원특별자치도강릉교육지원청", "생성일자": "2013-11-29", "변경일자": "2025-10-25", "데이터기준일자": "2026-03-20", "제공기관코드": "B554398", "제공기관명": "한국교육시설안전원"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.8477386, 37.75885165]}, "properties": {"학교ID": "B000004942", "학교명": "송양초등학교", "학교급구분": "초등학교", "설립일자": "1943-07-05", "설립형태": "공립", "본교분교구분": "본교", "소재지지번주소": "강원특별자치도 강릉시 성산면 위촌리 589", "소재지도로명주소": "강원특별자치도 강릉시 성산면 위촌길 198", "시도교육청코드": 7801000, "시도교육청명": "강원특별자치도교육청", "교육지원청명": "강원특별자치도강릉교육지원청", "생성일자": "2013-11-29", "변경일자": "2025-10-25", "데이터기준일자": "2026-03-20", "제공기관코드": "B554398", "제공기관명": "한국교육시설안전원"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.9689053, 37.67721845]}, "properties": {"학교ID": "B000004947", "학교명": "숲실초등학교", "학교급구분": "초등학교", "설립일자": "1944-06-13", "설립형태": "공립", "본교분교구분": "본교", "소재지지번주소": "강원특별자치도 강릉시 강동면 임곡리 350", "소재지도로명주소": "강원특별자치도 강릉시 강동면 임곡로 890-14", "시도교육청코드": 7801000, "시도교육청명": "강원특별자치도교육청", "교육지원청명": "강원특별자치도강릉교육지원청", "생성일자": "2013-11-29", "변경일자": "2025-10-25", "데이터기준일자": "2026-03-20", "제공기관코드": "B554398", "제공기관명": "한국교육시설안전원"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.8232652, 37.90706843]}, "properties": {"학교ID": "B000004933", "학교명": "신영초등학교", "학교급구분": "초등학교", "설립일자": "1966-03-21", "설립형태": "공립", "본교분교구분": "본교", "소재지지번주소": "강원특별자치도 강릉시 주문진읍 향호리 1187-7", "소재지도로명주소": "강원특별자치도 강릉시 주문진읍 주문북로 160", "시도교육청코드": 7801000, "시도교육청명": "강원특별자치도교육청", "교육지원청명": "강원특별자치도강릉교육지원청", "생성일자": "2013-11-29", "변경일자": "2025-10-25", "데이터기준일자": "2026-03-20", "제공기관코드": "B554398", "제공기관명": "한국교육시설안전원"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.7873096, 37.85361534]}, "properties": {"학교ID": "B000004946", "학교명": "신왕초등학교", "학교급구분": "초등학교", "설립일자": "1965-03-01", "설립형태": "공립", "본교분교구분": "본교", "소재지지번주소": "강원특별자치도 강릉시 연곡면 행정리 226-4", "소재지도로명주소": "강원특별자치도 강릉시 연곡면 진고개로 2265-11", "시도교육청코드": 7801000, "시도교육청명": "강원특별자치도교육청", "교육지원청명": "강원특별자치도강릉교육지원청", "생성일자": "2013-11-29", "변경일자": "2025-10-25", "데이터기준일자": "2026-03-20", "제공기관코드": "B554398", "제공기관명": "한국교육시설안전원"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.8292866, 37.85709645]}, "properties": {"학교ID": "B000004945", "학교명": "연곡초등학교", "학교급구분": "초등학교", "설립일자": "1934-03-10", "설립형태": "공립", "본교분교구분": "본교", "소재지지번주소": "강원특별자치도 강릉시 연곡면 동덕리 959", "소재지도로명주소": "강원특별자치도 강릉시 연곡면 진고개로 2656", "시도교육청코드": 7801000, "시도교육청명": "강원특별자치도교육청", "교육지원청명": "강원특별자치도강릉교육지원청", "생성일자": "2013-11-29", "변경일자": "2025-10-25", "데이터기준일자": "2026-03-20", "제공기관코드": "B554398", "제공기관명": "한국교육시설안전원"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.8861601, 37.76044419]}, "properties": {"학교ID": "B000004921", "학교명": "영동초등학교", "학교급구분": "초등학교", "설립일자": "1985-06-07", "설립형태": "공립", "본교분교구분": "본교", "소재지지번주소": "강원특별자치도 강릉시 교동 1038", "소재지도로명주소": "강원특별자치도 강릉시 화부산로 28", "시도교육청코드": 7801000, "시도교육청명": "강원특별자치도교육청", "교육지원청명": "강원특별자치도강릉교육지원청", "생성일자": "2013-11-29", "변경일자": "2025-10-25", "데이터기준일자": "2026-03-20", "제공기관코드": "B554398", "제공기관명": "한국교육시설안전원"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [129.0347767, 37.6094088]}, "properties": {"학교ID": "B000004940", "학교명": "옥계초등학교", "학교급구분": "초등학교", "설립일자": "1920-09-01", "설립형태": "공립", "본교분교구분": "본교", "소재지지번주소": "강원특별자치도 강릉시 옥계면 현내리 344-1", "소재지도로명주소": "강원특별자치도 강릉시 옥계면 옥계로 1074", "시도교육청코드": 7801000, "시도교육청명": "강원특별자치도교육청", "교육지원청명": "강원특별자치도강릉교육지원청", "생성일자": "2013-11-29", "변경일자": "2025-10-25", "데이터기준일자": "2026-03-20", "제공기관코드": "B554398", "제공기관명": "한국교육시설안전원"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [129.0434718, 37.63495713]}, "properties": {"학교ID": "B000004939", "학교명": "옥계초등학교금진분교장", "학교급구분": "초등학교", "설립일자": "1965-04-10", "설립형태": "공립", "본교분교구분": "분교", "소재지지번주소": "강원특별자치도 강릉시 옥계면 금진리 417", "소재지도로명주소": "강원특별자치도 강릉시 옥계면 금진안길 2", "시도교육청코드": 7801000, "시도교육청명": "강원특별자치도교육청", "교육지원청명": "강원특별자치도강릉교육지원청", "생성일자": "2013-11-29", "변경일자": "2025-10-25", "데이터기준일자": "2026-03-20", "제공기관코드": "B554398", "제공기관명": "한국교육시설안전원"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.9027168, 37.75683221]}, "properties": {"학교ID": "B000004924", "학교명": "옥천초등학교", "학교급구분": "초등학교", "설립일자": "1943-07-06", "설립형태": "공립", "본교분교구분": "본교", "소재지지번주소": "강원특별자치도 강릉시 옥천동 111", "소재지도로명주소": "강원특별자치도 강릉시 수문길 25", "시도교육청코드": 7801000, "시도교육청명": "강원특별자치도교육청", "교육지원청명": "강원특별자치도강릉교육지원청", "생성일자": "2013-11-29", "변경일자": "2025-10-25", "데이터기준일자": "2026-03-20", "제공기관코드": "B554398", "제공기관명": "한국교육시설안전원"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.8368585, 37.67359898]}, "properties": {"학교ID": "B000004948", "학교명": "왕산초등학교", "학교급구분": "초등학교", "설립일자": "1936-09-25", "설립형태": "공립", "본교분교구분": "본교", "소재지지번주소": "강원특별자치도 강릉시 왕산면 도마리 595", "소재지도로명주소": "강원특별자치도 강릉시 왕산면 백두대간로 2011-8", "시도교육청코드": 7801000, "시도교육청명": "강원특별자치도교육청", "교육지원청명": "강원특별자치도강릉교육지원청", "생성일자": "2013-11-29", "변경일자": "2025-10-25", "데이터기준일자": "2026-03-20", "제공기관코드": "B554398", "제공기관명": "한국교육시설안전원"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.9375871, 37.7297797]}, "properties": {"학교ID": "B000004930", "학교명": "운산초등학교", "학교급구분": "초등학교", "설립일자": "1949-01-31", "설립형태": "공립", "본교분교구분": "분교", "소재지지번주소": "강원특별자치도 강릉시 운산동 148", "소재지도로명주소": "강원특별자치도 강릉시 운산길 79-15", "시도교육청코드": 7801000, "시도교육청명": "강원특별자치도교육청", "교육지원청명": "강원특별자치도강릉교육지원청", "생성일자": "2013-11-29", "변경일자": "2025-10-25", "데이터기준일자": "2026-03-20", "제공기관코드": "B554398", "제공기관명": "한국교육시설안전원"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.8586163, 37.83710042]}, "properties": {"학교ID": "B000004944", "학교명": "운양초등학교", "학교급구분": "초등학교", "설립일자": "1943-07-30", "설립형태": "공립", "본교분교구분": "본교", "소재지지번주소": "강원특별자치도 강릉시 사천면 판교리 254", "소재지도로명주소": "강원특별자치도 강릉시 사천면 이설당1길 36", "시도교육청코드": 7801000, "시도교육청명": "강원특별자치도교육청", "교육지원청명": "강원특별자치도강릉교육지원청", "생성일자": "2013-11-29", "변경일자": "2025-10-25", "데이터기준일자": "2026-03-20", "제공기관코드": "B554398", "제공기관명": "한국교육시설안전원"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.8711009, 37.76001124]}, "properties": {"학교ID": "B000026210", "학교명": "유천초등학교", "학교급구분": "초등학교", "설립일자": "2020-03-01", "설립형태": "공립", "본교분교구분": "본교", "소재지지번주소": "강원특별자치도 강릉시 유천동 766", "소재지도로명주소": "강원특별자치도 강릉시 선수촌로 100", "시도교육청코드": 7801000, "시도교육청명": "강원특별자치도교육청", "교육지원청명": "강원특별자치도강릉교육지원청", "생성일자": "2013-11-29", "변경일자": "2025-10-25", "데이터기준일자": "2026-03-20", "제공기관코드": "B554398", "제공기관명": "한국교육시설안전원"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.8816262, 37.76623849]}, "properties": {"학교ID": "B000004920", "학교명": "율곡초등학교", "학교급구분": "초등학교", "설립일자": "2000-03-01", "설립형태": "공립", "본교분교구분": "본교", "소재지지번주소": "강원특별자치도 강릉시 교동 1851", "소재지도로명주소": "강원특별자치도 강릉시 원대로 129", "시도교육청코드": 7801000, "시도교육청명": "강원특별자치도교육청", "교육지원청명": "강원특별자치도강릉교육지원청", "생성일자": "2013-11-29", "변경일자": "2025-10-25", "데이터기준일자": "2026-03-20", "제공기관코드": "B554398", "제공기관명": "한국교육시설안전원"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [129.0336174, 37.68735318]}, "properties": {"학교ID": "B000004938", "학교명": "정동초등학교", "학교급구분": "초등학교", "설립일자": "1940-11-03", "설립형태": "공립", "본교분교구분": "본교", "소재지지번주소": "강원특별자치도 강릉시 강동면 정동진리 184", "소재지도로명주소": "강원특별자치도 강릉시 강동면 헌화로 1055", "시도교육청코드": 7801000, "시도교육청명": "강원특별자치도교육청", "교육지원청명": "강원특별자치도강릉교육지원청", "생성일자": "2013-11-29", "변경일자": "2025-10-25", "데이터기준일자": "2026-03-20", "제공기관코드": "B554398", "제공기관명": "한국교육시설안전원"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.8266399, 37.88688223]}, "properties": {"학교ID": "B000004931", "학교명": "주문진초등학교", "학교급구분": "초등학교", "설립일자": "1919-10-01", "설립형태": "공립", "본교분교구분": "본교", "소재지지번주소": "강원특별자치도 강릉시 주문진읍 교항리 161", "소재지도로명주소": "강원특별자치도 강릉시 주문진읍 주문로 26", "시도교육청코드": 7801000, "시도교육청명": "강원특별자치도교육청", "교육지원청명": "강원특별자치도강릉교육지원청", "생성일자": "2013-11-29", "변경일자": "2025-10-25", "데이터기준일자": "2026-03-20", "제공기관코드": "B554398", "제공기관명": "한국교육시설안전원"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.8260432, 37.89800326]}, "properties": {"학교ID": "B000004932", "학교명": "주영초등학교", "학교급구분": "초등학교", "설립일자": "1942-04-05", "설립형태": "공립", "본교분교구분": "본교", "소재지지번주소": "강원특별자치도 강릉시 주문진읍 주문리 461", "소재지도로명주소": "강원특별자치도 강릉시 주문진읍 약수동길 15-12", "시도교육청코드": 7801000, "시도교육청명": "강원특별자치도교육청", "교육지원청명": "강원특별자치도강릉교육지원청", "생성일자": "2013-11-29", "변경일자": "2025-10-25", "데이터기준일자": "2026-03-20", "제공기관코드": "B554398", "제공기관명": "한국교육시설안전원"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.9228517, 37.75808663]}, "properties": {"학교ID": "B000004916", "학교명": "중앙초등학교", "학교급구분": "초등학교", "설립일자": "1957-04-08", "설립형태": "공립", "본교분교구분": "본교", "소재지지번주소": "강원특별자치도 강릉시 입암동 산12", "소재지도로명주소": "강원특별자치도 강릉시 성덕포남로 18", "시도교육청코드": 7801000, "시도교육청명": "강원특별자치도교육청", "교육지원청명": "강원특별자치도강릉교육지원청", "생성일자": "2013-11-29", "변경일자": "2025-10-25", "데이터기준일자": "2026-03-20", "제공기관코드": "B554398", "제공기관명": "한국교육시설안전원"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.913111, 37.78168439]}, "properties": {"학교ID": "B000004912", "학교명": "초당초등학교", "학교급구분": "초등학교", "설립일자": "1992-03-01", "설립형태": "공립", "본교분교구분": "본교", "소재지지번주소": "강원특별자치도 강릉시 초당동 산16", "소재지도로명주소": "강원특별자치도 강릉시 연당길 35-11", "시도교육청코드": 7801000, "시도교육청명": "강원특별자치도교육청", "교육지원청명": "강원특별자치도강릉교육지원청", "생성일자": "2013-11-29", "변경일자": "2025-10-25", "데이터기준일자": "2026-03-20", "제공기관코드": "B554398", "제공기관명": "한국교육시설안전원"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.9052949, 37.77276174]}, "properties": {"학교ID": "B000004926", "학교명": "포남초등학교", "학교급구분": "초등학교", "설립일자": "1981-09-01", "설립형태": "공립", "본교분교구분": "본교", "소재지지번주소": "강원특별자치도 강릉시 포남동 1085", "소재지도로명주소": "강원특별자치도 강릉시 가작로287번길 20", "시도교육청코드": 7801000, "시도교육청명": "강원특별자치도교육청", "교육지원청명": "강원특별자치도강릉교육지원청", "생성일자": "2013-11-29", "변경일자": "2025-10-25", "데이터기준일자": "2026-03-20", "제공기관코드": "B554398", "제공기관명": "한국교육시설안전원"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.9141358, 37.77444621]}, "properties": {"학교ID": "B000004929", "학교명": "한솔초등학교", "학교급구분": "초등학교", "설립일자": "1997-05-06", "설립형태": "공립", "본교분교구분": "본교", "소재지지번주소": "강원특별자치도 강릉시 포남동 1296", "소재지도로명주소": "강원특별자치도 강릉시 하평2길 45", "시도교육청코드": 7801000, "시도교육청명": "강원특별자치도교육청", "교육지원청명": "강원특별자치도강릉교육지원청", "생성일자": "2013-11-29", "변경일자": "2025-10-25", "데이터기준일자": "2026-03-20", "제공기관코드": "B554398", "제공기관명": "한국교육시설안전원"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.9089302, 37.75361977]}, "properties": {"학교ID": "B000009764", "학교명": "강릉중학교", "학교급구분": "중학교", "설립일자": "1951-09-17", "설립형태": "공립", "본교분교구분": "본교", "소재지지번주소": "강원특별자치도 강릉시 입암동 497", "소재지도로명주소": "강원특별자치도 강릉시 강중길44번길 8", "시도교육청코드": 7801000, "시도교육청명": "강원특별자치도교육청", "교육지원청명": "강원특별자치도강릉교육지원청", "생성일자": "2013-11-29", "변경일자": "2025-10-25", "데이터기준일자": "2026-03-20", "제공기관코드": "B554398", "제공기관명": "한국교육시설안전원"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.8883419, 37.75232958]}, "properties": {"학교ID": "B000009765", "학교명": "강릉해람중학교", "학교급구분": "중학교", "설립일자": "1951-08-31", "설립형태": "공립", "본교분교구분": "본교", "소재지지번주소": "강원특별자치도 강릉시 용강동 47-8", "소재지도로명주소": "강원특별자치도 강릉시 명주로 25", "시도교육청코드": 7801000, "시도교육청명": "강원특별자치도교육청", "교육지원청명": "강원특별자치도강릉교육지원청", "생성일자": "2013-11-29", "변경일자": "2025-10-25", "데이터기준일자": "2026-03-20", "제공기관코드": "B554398", "제공기관명": "한국교육시설안전원"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.9000107, 37.74193219]}, "properties": {"학교ID": "B000009763", "학교명": "경포중학교", "학교급구분": "중학교", "설립일자": "1962-03-07", "설립형태": "공립", "본교분교구분": "본교", "소재지지번주소": "강원특별자치도 강릉시 노암동 462-1", "소재지도로명주소": "강원특별자치도 강릉시 노암등길 76", "시도교육청코드": 7801000, "시도교육청명": "강원특별자치도교육청", "교육지원청명": "강원특별자치도강릉교육지원청", "생성일자": "2013-11-29", "변경일자": "2025-10-25", "데이터기준일자": "2026-03-20", "제공기관코드": "B554398", "제공기관명": "한국교육시설안전원"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.8788335, 37.75721724]}, "properties": {"학교ID": "B000009769", "학교명": "관동중학교", "학교급구분": "중학교", "설립일자": "1983-06-17", "설립형태": "공립", "본교분교구분": "본교", "소재지지번주소": "강원특별자치도 강릉시 교동 1427", "소재지도로명주소": "강원특별자치도 강릉시 하슬라로20번길 14", "시도교육청코드": 7801000, "시도교육청명": "강원특별자치도교육청", "교육지원청명": "강원특별자치도강릉교육지원청", "생성일자": "2013-11-29", "변경일자": "2025-10-25", "데이터기준일자": "2026-03-20", "제공기관코드": "B554398", "제공기관명": "한국교육시설안전원"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.9135576, 37.7766622]}, "properties": {"학교ID": "B000009770", "학교명": "동명중학교", "학교급구분": "중학교", "설립일자": "1985-10-30", "설립형태": "공립", "본교분교구분": "본교", "소재지지번주소": "강원특별자치도 강릉시 포남동 424", "소재지도로명주소": "강원특별자치도 강릉시 보래미하길79번길 21", "시도교육청코드": 7801000, "시도교육청명": "강원특별자치도교육청", "교육지원청명": "강원특별자치도강릉교육지원청", "생성일자": "2013-11-29", "변경일자": "2025-10-25", "데이터기준일자": "2026-03-20", "제공기관코드": "B554398", "제공기관명": "한국교육시설안전원"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.8454797, 37.82832184]}, "properties": {"학교ID": "B000009773", "학교명": "사천중학교", "학교급구분": "중학교", "설립일자": "1955-03-29", "설립형태": "공립", "본교분교구분": "본교", "소재지지번주소": "강원특별자치도 강릉시 사천면 석교리 234", "소재지도로명주소": "강원특별자치도 강릉시 사천면 석교골말길 8", "시도교육청코드": 7801000, "시도교육청명": "강원특별자치도교육청", "교육지원청명": "강원특별자치도강릉교육지원청", "생성일자": "2013-11-29", "변경일자": "2025-10-25", "데이터기준일자": "2026-03-20", "제공기관코드": "B554398", "제공기관명": "한국교육시설안전원"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.8797975, 37.77109607]}, "properties": {"학교ID": "B000009768", "학교명": "솔올중학교", "학교급구분": "중학교", "설립일자": "2007-06-01", "설립형태": "공립", "본교분교구분": "본교", "소재지지번주소": "강원특별자치도 강릉시 교동 1798", "소재지도로명주소": "강원특별자치도 강릉시 솔올로 102", "시도교육청코드": 7801000, "시도교육청명": "강원특별자치도교육청", "교육지원청명": "강원특별자치도강릉교육지원청", "생성일자": "2013-11-29", "변경일자": "2025-10-25", "데이터기준일자": "2026-03-20", "제공기관코드": "B554398", "제공기관명": "한국교육시설안전원"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [129.0331651, 37.60274801]}, "properties": {"학교ID": "B000009772", "학교명": "옥계중학교", "학교급구분": "중학교", "설립일자": "1954-06-27", "설립형태": "공립", "본교분교구분": "본교", "소재지지번주소": "강원특별자치도 강릉시 옥계면 천남리 172", "소재지도로명주소": "강원특별자치도 강릉시 옥계면 천남길 38-13", "시도교육청코드": 7801000, "시도교육청명": "강원특별자치도교육청", "교육지원청명": "강원특별자치도강릉교육지원청", "생성일자": "2013-11-29", "변경일자": "2025-10-25", "데이터기준일자": "2026-03-20", "제공기관코드": "B554398", "제공기관명": "한국교육시설안전원"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.8367696, 37.67297147]}, "properties": {"학교ID": "B000009774", "학교명": "왕산중학교", "학교급구분": "중학교", "설립일자": "1970-06-09", "설립형태": "공립", "본교분교구분": "본교", "소재지지번주소": "강원특별자치도 강릉시 왕산면 도마리 325-18", "소재지도로명주소": "강원특별자치도 강릉시 왕산면 백두대간로 2005", "시도교육청코드": 7801000, "시도교육청명": "강원특별자치도교육청", "교육지원청명": "강원특별자치도강릉교육지원청", "생성일자": "2013-11-29", "변경일자": "2025-10-25", "데이터기준일자": "2026-03-20", "제공기관코드": "B554398", "제공기관명": "한국교육시설안전원"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.8888217, 37.77033971]}, "properties": {"학교ID": "B000009767", "학교명": "율곡중학교", "학교급구분": "중학교", "설립일자": "1986-03-05", "설립형태": "공립", "본교분교구분": "본교", "소재지지번주소": "강원특별자치도 강릉시 교동 695", "소재지도로명주소": "강원특별자치도 강릉시 가작로 125", "시도교육청코드": 7801000, "시도교육청명": "강원특별자치도교육청", "교육지원청명": "강원특별자치도강릉교육지원청", "생성일자": "2013-11-29", "변경일자": "2025-10-25", "데이터기준일자": "2026-03-20", "제공기관코드": "B554398", "제공기관명": "한국교육시설안전원"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.8278508, 37.88028383]}, "properties": {"학교ID": "B000009771", "학교명": "주문진중학교", "학교급구분": "중학교", "설립일자": "1951-08-31", "설립형태": "공립", "본교분교구분": "본교", "소재지지번주소": "강원특별자치도 강릉시 주문진읍 교항리 48-119", "소재지도로명주소": "강원특별자치도 강릉시 주문진읍 연주로 294", "시도교육청코드": 7801000, "시도교육청명": "강원특별자치도교육청", "교육지원청명": "강원특별자치도강릉교육지원청", "생성일자": "2013-11-29", "변경일자": "2025-10-25", "데이터기준일자": "2026-03-20", "제공기관코드": "B554398", "제공기관명": "한국교육시설안전원"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.9070618, 37.77201703]}, "properties": {"학교ID": "B000009766", "학교명": "하슬라중학교", "학교급구분": "중학교", "설립일자": "1981-03-01", "설립형태": "공립", "본교분교구분": "본교", "소재지지번주소": "강원특별자치도 강릉시 포남동 1086", "소재지도로명주소": "강원특별자치도 강릉시 보래미길 9", "시도교육청코드": 7801000, "시도교육청명": "강원특별자치도교육청", "교육지원청명": "강원특별자치도강릉교육지원청", "생성일자": "2013-11-29", "변경일자": "2025-10-25", "데이터기준일자": "2026-03-20", "제공기관코드": "B554398", "제공기관명": "한국교육시설안전원"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.9159872, 37.78891804]}, "properties": {"학교ID": "B000012775", "학교명": "강릉고등학교", "학교급구분": "고등학교", "설립일자": "1962-03-07", "설립형태": "공립", "본교분교구분": "본교", "소재지지번주소": "강원특별자치도 강릉시 초당동 57-2", "소재지도로명주소": "강원특별자치도 강릉시 강릉대로587번길 68", "시도교육청코드": 7801000, "시도교육청명": "강원특별자치도교육청", "교육지원청명": "강원특별자치도강릉교육지원청", "생성일자": "2013-11-29", "변경일자": "2025-10-25", "데이터기준일자": "2026-03-20", "제공기관코드": "B554398", "제공기관명": "한국교육시설안전원"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.8938677, 37.76314126]}, "properties": {"학교ID": "B000012779", "학교명": "강릉명륜고등학교", "학교급구분": "고등학교", "설립일자": "1963-12-14", "설립형태": "사립", "본교분교구분": "본교", "소재지지번주소": "강원특별자치도 강릉시 교동 236", "소재지도로명주소": "강원특별자치도 강릉시 율곡로 2920-8", "시도교육청코드": 7801000, "시도교육청명": "강원특별자치도교육청", "교육지원청명": "강원특별자치도강릉교육지원청", "생성일자": "2013-11-29", "변경일자": "2025-10-25", "데이터기준일자": "2026-03-20", "제공기관코드": "B554398", "제공기관명": "한국교육시설안전원"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.8700327, 37.77563062]}, "properties": {"학교ID": "B000012781", "학교명": "강릉문성고등학교", "학교급구분": "고등학교", "설립일자": "1988-03-01", "설립형태": "사립", "본교분교구분": "본교", "소재지지번주소": "강원특별자치도 강릉시 지변동 산54", "소재지도로명주소": "강원특별자치도 강릉시 지변길 158", "시도교육청코드": 7801000, "시도교육청명": "강원특별자치도교육청", "교육지원청명": "강원특별자치도강릉교육지원청", "생성일자": "2013-11-29", "변경일자": "2025-10-25", "데이터기준일자": "2026-03-20", "제공기관코드": "B554398", "제공기관명": "한국교육시설안전원"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.9034321, 37.75965121]}, "properties": {"학교ID": "B000012776", "학교명": "강릉여자고등학교", "학교급구분": "고등학교", "설립일자": "1940-03-20", "설립형태": "공립", "본교분교구분": "본교", "소재지지번주소": "강원특별자치도 강릉시 옥천동 237-1", "소재지도로명주소": "강원특별자치도 강릉시 용지로 107", "시도교육청코드": 7801000, "시도교육청명": "강원특별자치도교육청", "교육지원청명": "강원특별자치도강릉교육지원청", "생성일자": "2013-11-29", "변경일자": "2025-10-25", "데이터기준일자": "2026-03-20", "제공기관코드": "B554398", "제공기관명": "한국교육시설안전원"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.8307453, 37.88054161]}, "properties": {"학교ID": "B000011554", "학교명": "강릉정보공업고등학교", "학교급구분": "고등학교", "설립일자": "1970-03-02", "설립형태": "공립", "본교분교구분": "본교", "소재지지번주소": "강원특별자치도 강릉시 주문진읍 교항리 48-123", "소재지도로명주소": "강원특별자치도 강릉시 주문진읍 학교길 26", "시도교육청코드": 7801000, "시도교육청명": "강원특별자치도교육청", "교육지원청명": "강원특별자치도강릉교육지원청", "생성일자": "2013-11-29", "변경일자": "2025-10-25", "데이터기준일자": "2026-03-20", "제공기관코드": "B554398", "제공기관명": "한국교육시설안전원"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.8897642, 37.76013262]}, "properties": {"학교ID": "B000012777", "학교명": "강릉제일고등학교", "학교급구분": "고등학교", "설립일자": "1938-03-19", "설립형태": "공립", "본교분교구분": "본교", "소재지지번주소": "강원특별자치도 강릉시 교동 886", "소재지도로명주소": "강원특별자치도 강릉시 화부산로8번길 37", "시도교육청코드": 7801000, "시도교육청명": "강원특별자치도교육청", "교육지원청명": "강원특별자치도강릉교육지원청", "생성일자": "2013-11-29", "변경일자": "2025-10-25", "데이터기준일자": "2026-03-20", "제공기관코드": "B554398", "제공기관명": "한국교육시설안전원"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.9150334, 37.75736497]}, "properties": {"학교ID": "B000011553", "학교명": "강릉중앙고등학교", "학교급구분": "고등학교", "설립일자": "1928-06-15", "설립형태": "공립", "본교분교구분": "본교", "소재지지번주소": "강원특별자치도 강릉시 입암동 533", "소재지도로명주소": "강원특별자치도 강릉시 강변로 422", "시도교육청코드": 7801000, "시도교육청명": "강원특별자치도교육청", "교육지원청명": "강원특별자치도강릉교육지원청", "생성일자": "2013-11-29", "변경일자": "2025-10-25", "데이터기준일자": "2026-03-20", "제공기관코드": "B554398", "제공기관명": "한국교육시설안전원"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.8645411, 37.72193969]}, "properties": {"학교ID": "B000011872", "학교명": "강원예술고등학교", "학교급구분": "고등학교", "설립일자": "2001-03-01", "설립형태": "공립", "본교분교구분": "본교", "소재지지번주소": "강원특별자치도 강릉시 구정면 제비리 132-2", "소재지도로명주소": "강원특별자치도 강릉시 구정면 칠봉로 670-34", "시도교육청코드": 7801000, "시도교육청명": "강원특별자치도교육청", "교육지원청명": "강원특별자치도강릉교육지원청", "생성일자": "2013-11-29", "변경일자": "2025-10-25", "데이터기준일자": "2026-03-20", "제공기관코드": "B554398", "제공기관명": "한국교육시설안전원"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.8870353, 37.764332]}, "properties": {"학교ID": "B000012780", "학교명": "강일여자고등학교", "학교급구분": "고등학교", "설립일자": "1967-10-05", "설립형태": "사립", "본교분교구분": "본교", "소재지지번주소": "강원특별자치도 강릉시 교동 1133-2", "소재지도로명주소": "강원특별자치도 강릉시 화부산로 89", "시도교육청코드": 7801000, "시도교육청명": "강원특별자치도교육청", "교육지원청명": "강원특별자치도강릉교육지원청", "생성일자": "2013-11-29", "변경일자": "2025-10-25", "데이터기준일자": "2026-03-20", "제공기관코드": "B554398", "제공기관명": "한국교육시설안전원"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.9160576, 37.78170517]}, "properties": {"학교ID": "B000012778", "학교명": "경포고등학교", "학교급구분": "고등학교", "설립일자": "1983-03-01", "설립형태": "공립", "본교분교구분": "본교", "소재지지번주소": "강원특별자치도 강릉시 포남동 21", "소재지도로명주소": "강원특별자치도 강릉시 강릉대로547번길 14", "시도교육청코드": 7801000, "시도교육청명": "강원특별자치도교육청", "교육지원청명": "강원특별자치도강릉교육지원청", "생성일자": "2013-11-29", "변경일자": "2025-10-25", "데이터기준일자": "2026-03-20", "제공기관코드": "B554398", "제공기관명": "한국교육시설안전원"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.8301949, 37.88135669]}, "properties": {"학교ID": "B000012782", "학교명": "주문진고등학교", "학교급구분": "고등학교", "설립일자": "1988-06-05", "설립형태": "공립", "본교분교구분": "본교", "소재지지번주소": "강원특별자치도 강릉시 주문진읍 교항리 48-194", "소재지도로명주소": "강원특별자치도 강릉시 주문진읍 학교길 28", "시도교육청코드": 7801000, "시도교육청명": "강원특별자치도교육청", "교육지원청명": "강원특별자치도강릉교육지원청", "생성일자": "2013-11-29", "변경일자": "2025-10-25", "데이터기준일자": "2026-03-20", "제공기관코드": "B554398", "제공기관명": "한국교육시설안전원"}}, {"type": "Feature", "geometry": {"type": "Point", "coordinates": [128.931551, 37.778999]}, "properties": {"학교명": "강릉오성학교", "학교급구분": "특수학교"}}]};
+  const MAP_BOUNDS = [[33.0, 124.7], [38.7, 131.9]];
+  const BASEMAP = {"provider": "naver", "key": "", "tileVersion": "1778232861", "tileTemplate": "https://map.pstatic.net/nrb/styles/basic/1778232861/{z}/{x}/{y}.png"};
+  function escapeHtml(s) {
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+  function schoolTierFromGrade(grade) {
+    const g = String(grade || '');
+    if (g.indexOf('유치') !== -1) return 'kinder';
+    if (g.indexOf('특수') !== -1) return 'special';
+    if (g.indexOf('초') !== -1) return 'elm';
+    if (g.indexOf('중') !== -1) return 'mid';
+    if (g.indexOf('고') !== -1) return 'high';
+    return 'other';
+  }
+  function schoolTierColor(tier) {
+    if (tier === 'kinder') return '#f97316';
+    if (tier === 'special') return '#8b5cf6';
+    if (tier === 'elm') return '#5b6eef';
+    if (tier === 'mid') return '#14b8a6';
+    if (tier === 'high') return '#e11d48';
+    return '#64748b';
+  }
+  function shortSchoolName(full) {
+    if (!full) return '';
+    let s = String(full);
+    if (s.indexOf('초등학교') !== -1) s = s.replace('초등학교', '초');
+    else if (s.indexOf('중학교') !== -1) s = s.replace('중학교', '중');
+    else if (s.indexOf('고등학교') !== -1) s = s.replace('고등학교', '고');
+    else if (s.indexOf('유치원') !== -1) s = s.replace('유치원', '유');
+    else if (s.indexOf('특수학교') !== -1) s = s.replace('특수학교', '특');
+    return s;
+  }
+  function fillSchoolNameRail() {
+    const kinder = [];
+    const elm = [];
+    const mid = [];
+    const high = [];
+    const special = [];
+    for (let i = 0; i < GEO.features.length; i++) {
+      const p = GEO.features[i].properties || {};
+      const tier = schoolTierFromGrade(p['학교급구분'] || '');
+      const n = String(p['학교명'] || '').trim();
+      if (!n) {
+        continue;
+      }
+      if (tier === 'kinder') {
+        kinder.push(n);
+      } else if (tier === 'elm') {
+        elm.push(n);
+      } else if (tier === 'mid') {
+        mid.push(n);
+      } else if (tier === 'high') {
+        high.push(n);
+      } else if (tier === 'special') {
+        special.push(n);
+      }
+    }
+    const cmp = new Intl.Collator('ko').compare;
+    function sortByShort(arr) {
+      arr.sort(function (a, b) {
+        return cmp(shortSchoolName(a), shortSchoolName(b));
+      });
+    }
+    sortByShort(kinder);
+    sortByShort(elm);
+    sortByShort(mid);
+    sortByShort(high);
+    sortByShort(special);
+    function fillFlow(id, arr) {
+      const el = document.getElementById(id);
+      if (!el) {
+        return;
+      }
+      el.innerHTML = arr.map(function (fullName) {
+        const sh = shortSchoolName(fullName);
+        if (!sh) {
+          return '';
+        }
+        return '<span class="sn-chip" title="' + escapeHtml(fullName) + '">'
+          + escapeHtml(sh) + '</span>';
+      }).join('');
+    }
+    fillFlow('sn-list-kinder', kinder);
+    fillFlow('sn-list-elm', elm);
+    fillFlow('sn-list-mid', mid);
+    fillFlow('sn-list-high', high);
+    fillFlow('sn-list-special', special);
+  }
+  function initSchoolRailPanel(shell) {
+    var rail = document.querySelector('.school-name-rail');
+    var handle = document.querySelector('.school-name-rail-drag');
+    var resizeHandle = document.querySelector('.school-name-rail-resize');
+    if (!rail || !handle || !resizeHandle || !shell) {
+      return;
+    }
+    var MIN_RAIL_W = 200;
+    var MIN_RAIL_H = 160;
+    var BASE_RAIL_W = 300;
+    var BASE_RAIL_H = 400;
+    var dragging = false;
+    var resizing = false;
+    var offsetX = 0;
+    var offsetY = 0;
+    var resizeStartX = 0;
+    var resizeStartY = 0;
+    var resizeStartW = 0;
+    var resizeStartH = 0;
+    var inner = rail.querySelector('.school-name-rail-inner');
+    var MIN_FIT_SCALE = 0.35;
+    function railContentOverflows() {
+      if (!inner) {
+        return false;
+      }
+      return inner.scrollHeight > inner.clientHeight + 1
+        || inner.scrollWidth > inner.clientWidth + 1;
+    }
+    function applyRailScaleToFit(preferredScale) {
+      if (!inner) {
+        return;
+      }
+      var lo = MIN_FIT_SCALE;
+      var hi = preferredScale;
+      var best = lo;
+      for (var i = 0; i < 20; i++) {
+        var mid = (lo + hi) / 2;
+        rail.style.setProperty('--rail-scale', mid.toFixed(3));
+        if (!railContentOverflows()) {
+          best = mid;
+          lo = mid;
+        } else {
+          hi = mid;
+        }
+      }
+      rail.style.setProperty('--rail-scale', best.toFixed(3));
+    }
+    function updateRailScale(width, height) {
+      var w = width || rail.offsetWidth;
+      var h = height || rail.offsetHeight;
+      var preferred = Math.min(w / BASE_RAIL_W, h / BASE_RAIL_H);
+      preferred = Math.max(MIN_FIT_SCALE, Math.min(1.5, preferred));
+      applyRailScaleToFit(preferred);
+    }
+    function clampRailSize(width, height) {
+      var maxW = Math.max(MIN_RAIL_W, shell.clientWidth - 8);
+      var maxH = Math.max(MIN_RAIL_H, shell.clientHeight - 8);
+      return {
+        width: Math.max(MIN_RAIL_W, Math.min(width, maxW)),
+        height: Math.max(MIN_RAIL_H, Math.min(height, maxH))
+      };
+    }
+    function clampRailPosition(left, top) {
+      var maxLeft = Math.max(0, shell.clientWidth - rail.offsetWidth);
+      var maxTop = Math.max(0, shell.clientHeight - rail.offsetHeight);
+      return {
+        left: Math.max(0, Math.min(left, maxLeft)),
+        top: Math.max(0, Math.min(top, maxTop))
+      };
+    }
+    function ensureDocked() {
+      if (rail.classList.contains('school-name-rail--docked')) {
+        return;
+      }
+      var shellRect = shell.getBoundingClientRect();
+      var railRect = rail.getBoundingClientRect();
+      applyRailPosition(railRect.left - shellRect.left, railRect.top - shellRect.top);
+    }
+    function applyRailPosition(left, top) {
+      var pos = clampRailPosition(left, top);
+      rail.style.left = pos.left + 'px';
+      rail.style.top = pos.top + 'px';
+      rail.style.right = 'auto';
+      rail.style.bottom = 'auto';
+      rail.classList.add('school-name-rail--docked');
+    }
+    function applyRailSize(width, height) {
+      var size = clampRailSize(width, height);
+      rail.style.width = size.width + 'px';
+      rail.style.height = size.height + 'px';
+      rail.classList.add('school-name-rail--sized');
+      updateRailScale(size.width, size.height);
+      if (rail.classList.contains('school-name-rail--docked')) {
+        applyRailPosition(parseFloat(rail.style.left) || 0, parseFloat(rail.style.top) || 0);
+      }
+    }
+    function onDragMove(e) {
+      if (!dragging) {
+        return;
+      }
+      var shellRect = shell.getBoundingClientRect();
+      applyRailPosition(
+        e.clientX - shellRect.left - offsetX,
+        e.clientY - shellRect.top - offsetY
+      );
+      e.preventDefault();
+    }
+    function endDrag(e) {
+      if (!dragging) {
+        return;
+      }
+      dragging = false;
+      rail.classList.remove('school-name-rail--dragging');
+      if (handle.hasPointerCapture(e.pointerId)) {
+        handle.releasePointerCapture(e.pointerId);
+      }
+      window.removeEventListener('pointermove', onDragMove);
+      window.removeEventListener('pointerup', endDrag);
+      window.removeEventListener('pointercancel', endDrag);
+    }
+    handle.addEventListener('pointerdown', function (e) {
+      if (e.pointerType === 'mouse' && e.button !== 0) {
+        return;
+      }
+      dragging = true;
+      rail.classList.add('school-name-rail--dragging');
+      ensureDocked();
+      var shellRect = shell.getBoundingClientRect();
+      var railRect = rail.getBoundingClientRect();
+      offsetX = e.clientX - railRect.left;
+      offsetY = e.clientY - railRect.top;
+      handle.setPointerCapture(e.pointerId);
+      window.addEventListener('pointermove', onDragMove);
+      window.addEventListener('pointerup', endDrag);
+      window.addEventListener('pointercancel', endDrag);
+      e.preventDefault();
+    });
+    function onResizeMove(e) {
+      if (!resizing) {
+        return;
+      }
+      applyRailSize(
+        resizeStartW + (e.clientX - resizeStartX),
+        resizeStartH + (e.clientY - resizeStartY)
+      );
+      e.preventDefault();
+    }
+    function endResize(e) {
+      if (!resizing) {
+        return;
+      }
+      resizing = false;
+      rail.classList.remove('school-name-rail--resizing');
+      if (resizeHandle.hasPointerCapture(e.pointerId)) {
+        resizeHandle.releasePointerCapture(e.pointerId);
+      }
+      window.removeEventListener('pointermove', onResizeMove);
+      window.removeEventListener('pointerup', endResize);
+      window.removeEventListener('pointercancel', endResize);
+    }
+    resizeHandle.addEventListener('pointerdown', function (e) {
+      if (e.pointerType === 'mouse' && e.button !== 0) {
+        return;
+      }
+      resizing = true;
+      rail.classList.add('school-name-rail--resizing');
+      ensureDocked();
+      resizeStartX = e.clientX;
+      resizeStartY = e.clientY;
+      resizeStartW = rail.offsetWidth;
+      resizeStartH = rail.offsetHeight;
+      if (!rail.classList.contains('school-name-rail--sized')) {
+        applyRailSize(resizeStartW, resizeStartH);
+        resizeStartW = rail.offsetWidth;
+        resizeStartH = rail.offsetHeight;
+      }
+      resizeHandle.setPointerCapture(e.pointerId);
+      window.addEventListener('pointermove', onResizeMove);
+      window.addEventListener('pointerup', endResize);
+      window.addEventListener('pointercancel', endResize);
+      e.preventDefault();
+      e.stopPropagation();
+    });
+    window.addEventListener('resize', function () {
+      if (rail.classList.contains('school-name-rail--sized')) {
+        applyRailSize(rail.offsetWidth, rail.offsetHeight);
+      } else {
+        updateRailScale();
+      }
+      if (rail.classList.contains('school-name-rail--docked')) {
+        applyRailPosition(parseFloat(rail.style.left) || 0, parseFloat(rail.style.top) || 0);
+      }
+    });
+    window.requestAnimationFrame(function () {
+      updateRailScale();
+    });
+  }
+  (function () {
+    fillSchoolNameRail();
+    initSchoolRailPanel(document.querySelector('.map-shell'));
+    const maxBounds = L.latLngBounds(MAP_BOUNDS[0], MAP_BOUNDS[1]);
+    const map = L.map('map', {
+      maxBounds: maxBounds,
+      maxBoundsViscosity: 1.0,
+      preferCanvas: true
+    });
+    var tilePane = map.getPanes().tilePane;
+    if (tilePane && BASEMAP.provider !== 'naver') {
+      tilePane.classList.add('tile-tune-map');
+    }
+    var tileUrl, tileOpts;
+    if (BASEMAP.provider === 'naver') {
+      var naverTemplate = BASEMAP.tileTemplate || (
+        'https://map.pstatic.net/nrb/styles/basic/'
+        + (BASEMAP.tileVersion || '1778232861') + '/{z}/{x}/{y}.png'
+      );
+      tileUrl = naverTemplate;
+      tileOpts = {
+        maxZoom: 21,
+        minZoom: 0,
+        bounds: maxBounds,
+        attribution: '&copy; <a href="https://www.navercorp.com/" target="_blank" rel="noopener">NAVER</a>'
+      };
+    } else if (BASEMAP.provider === 'vworld' && BASEMAP.key) {
+      tileUrl = 'https://api.vworld.kr/req/wmts/1.0.0/'
+        + encodeURIComponent(BASEMAP.key) + '/Base/{z}/{y}/{x}.png';
+      tileOpts = {
+        maxZoom: 19,
+        bounds: maxBounds,
+        crossOrigin: true,
+        attribution: '&copy; <a href="https://www.vworld.kr" target="_blank" rel="noopener">브이월드</a>(국토교통부)'
+      };
+    } else {
+      tileUrl = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+      tileOpts = {
+        maxZoom: 19,
+        bounds: maxBounds,
+        crossOrigin: true,
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+      };
+    }
+    L.tileLayer(tileUrl, tileOpts).addTo(map);
+
+    const schoolMarkers = [];
+    const layers = [];
+    for (const f of GEO.features) {
+      const [lon, lat] = f.geometry.coordinates;
+      const p = f.properties || {};
+      const fullName = p['학교명'] || '';
+      const label = shortSchoolName(fullName);
+      const grade = String(p['학교급구분'] || '');
+      const labelTier = schoolTierFromGrade(grade);
+      const color = schoolTierColor(labelTier);
+      const m = L.circleMarker([lat, lon], {
+        radius: 6,
+        weight: 2,
+        color: '#ffffff',
+        fillColor: color,
+        fillOpacity: 0.94
+      });
+      const lines = [
+        '<b>' + fullName + '</b>',
+        p['학교급구분'] || '',
+        (p['소재지도로명주소'] || p['소재지지번주소'] || '')
+      ].filter(Boolean);
+      m.bindPopup(lines.join('<br/>'), {
+        className: 'school-popup-card',
+        maxWidth: 280
+      });
+      if (label) {
+        m.bindTooltip(label, {
+          permanent: true,
+          direction: 'center',
+          offset: L.point(0, -12),
+          className: 'school-label school-label-' + labelTier,
+          opacity: 1,
+          interactive: false
+        });
+        schoolMarkers.push(m);
+      }
+      m.addTo(map);
+      layers.push(m);
+    }
+
+    const ZOOM_LABELS_CENTER = 15;
+    const ZOOM_LABEL_FONT_MIN = 10;
+    function schoolLabelFontSizePx(z) {
+      if (z >= ZOOM_LABELS_CENTER) {
+        return 12;
+      }
+      if (z <= ZOOM_LABEL_FONT_MIN) {
+        return 8;
+      }
+      return 8 + (12 - 8) * (z - ZOOM_LABEL_FONT_MIN)
+        / (ZOOM_LABELS_CENTER - ZOOM_LABEL_FONT_MIN);
+    }
+    function schoolLabelPaddingPx(z) {
+      if (z >= ZOOM_LABELS_CENTER) {
+        return { v: 3, h: 8 };
+      }
+      if (z <= ZOOM_LABEL_FONT_MIN) {
+        return { v: 1, h: 4 };
+      }
+      var t = (z - ZOOM_LABEL_FONT_MIN) / (ZOOM_LABELS_CENTER - ZOOM_LABEL_FONT_MIN);
+      return { v: 1 + 2 * t, h: 4 + 4 * t };
+    }
+    function applySchoolLabelZoomTypography(z) {
+      var fs = schoolLabelFontSizePx(z);
+      var pad = schoolLabelPaddingPx(z);
+      var root = map.getContainer();
+      root.style.setProperty('--school-label-fs', fs.toFixed(2) + 'px');
+      root.style.setProperty('--school-label-pad-v', pad.v.toFixed(2) + 'px');
+      root.style.setProperty('--school-label-pad-h', pad.h.toFixed(2) + 'px');
+    }
+    var schoolLabelLinksSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    schoolLabelLinksSvg.setAttribute('class', 'school-label-lines');
+    schoolLabelLinksSvg.setAttribute('aria-hidden', 'true');
+    map.getPanes().tooltipPane.appendChild(schoolLabelLinksSvg);
+    function resizeSchoolLabelLinks() {
+      var size = map.getSize();
+      schoolLabelLinksSvg.setAttribute('width', size.x);
+      schoolLabelLinksSvg.setAttribute('height', size.y);
+      schoolLabelLinksSvg.setAttribute('viewBox', '0 0 ' + size.x + ' ' + size.y);
+    }
+    const labelSpiral = [
+      [0, -12], [12, -12], [-12, -12], [24, -12], [-24, -12],
+      [0, 12], [12, 12], [-12, 12], [24, 12], [-24, 12],
+      [36, -12], [-36, -12], [0, -28], [16, -28], [-16, -28],
+      [36, 12], [-36, 12], [0, -44], [20, -44], [-20, -44],
+      [48, -16], [-48, -16], [0, 32], [0, -56]
+    ];
+    function toMapRect(rect) {
+      var mapRect = map.getContainer().getBoundingClientRect();
+      return {
+        left: rect.left - mapRect.left,
+        top: rect.top - mapRect.top,
+        right: rect.right - mapRect.left,
+        bottom: rect.bottom - mapRect.top
+      };
+    }
+    function anchorOnRect(rect, px, py) {
+      var cx = (rect.left + rect.right) / 2;
+      var cy = (rect.top + rect.bottom) / 2;
+      var dx = cx - px;
+      var dy = cy - py;
+      if (dx === 0 && dy === 0) {
+        return { x: cx, y: rect.bottom };
+      }
+      var hw = (rect.right - rect.left) / 2;
+      var hh = (rect.bottom - rect.top) / 2;
+      var adx = Math.abs(dx);
+      var ady = Math.abs(dy);
+      if (adx * hh > ady * hw) {
+        var sx = dx > 0 ? 1 : -1;
+        return { x: cx - sx * hw, y: cy - dy * (hw / adx) };
+      }
+      var sy = dy > 0 ? 1 : -1;
+      return { x: cx - dx * (hh / ady), y: cy - sy * hh };
+    }
+    function clearSchoolLabelLines() {
+      while (schoolLabelLinksSvg.firstChild) {
+        schoolLabelLinksSvg.removeChild(schoolLabelLinksSvg.firstChild);
+      }
+    }
+    function addSchoolLabelLine(x1, y1, x2, y2) {
+      var line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      line.setAttribute('x1', x1.toFixed(2));
+      line.setAttribute('y1', y1.toFixed(2));
+      line.setAttribute('x2', x2.toFixed(2));
+      line.setAttribute('y2', y2.toFixed(2));
+      line.setAttribute('class', 'school-label-line');
+      schoolLabelLinksSvg.appendChild(line);
+    }
+    function rectsOverlap(a, b, pad) {
+      return !(
+        a.right + pad < b.left ||
+        a.left - pad > b.right ||
+        a.bottom + pad < b.top ||
+        a.top - pad > b.bottom
+      );
+    }
+    function layoutSchoolLabels() {
+      if (!schoolMarkers.length) {
+        clearSchoolLabelLines();
+        return;
+      }
+      resizeSchoolLabelLinks();
+      clearSchoolLabelLines();
+      var z = map.getZoom();
+      applySchoolLabelZoomTypography(z);
+      var sorted = schoolMarkers.slice().sort(function (a, b) {
+        var pa = map.latLngToContainerPoint(a.getLatLng());
+        var pb = map.latLngToContainerPoint(b.getLatLng());
+        if (pa.y !== pb.y) {
+          return pa.y - pb.y;
+        }
+        return pa.x - pb.x;
+      });
+      var placed = [];
+      var pad = 2;
+      sorted.forEach(function (mk) {
+        var tip = mk.getTooltip();
+        if (!tip) {
+          return;
+        }
+        var chosen = null;
+        var chosenIndex = -1;
+        var si;
+        tip.options.direction = 'center';
+        for (si = 0; si < labelSpiral.length; si++) {
+          var off = labelSpiral[si];
+          tip.options.offset = L.point(off[0], off[1]);
+          tip.update();
+          var el = tip.getElement();
+          if (!el) {
+            continue;
+          }
+          el.style.fontSize = '';
+          el.style.padding = '';
+          el.style.opacity = '';
+          el.style.visibility = '';
+          var r = toMapRect(el.getBoundingClientRect());
+          var ok = true;
+          var pi;
+          for (pi = 0; pi < placed.length; pi++) {
+            if (rectsOverlap(r, placed[pi], pad)) {
+              ok = false;
+              break;
+            }
+          }
+          if (ok) {
+            chosen = r;
+            chosenIndex = si;
+            break;
+          }
+        }
+        if (!chosen) {
+          var last = labelSpiral[labelSpiral.length - 1];
+          tip.options.offset = L.point(last[0], last[1]);
+          tip.update();
+          chosenIndex = labelSpiral.length - 1;
+          var fallbackEl = tip.getElement();
+          if (fallbackEl) {
+            fallbackEl.style.fontSize = '';
+            fallbackEl.style.padding = '';
+            fallbackEl.style.opacity = '';
+            fallbackEl.style.visibility = '';
+            chosen = toMapRect(fallbackEl.getBoundingClientRect());
+          }
+        }
+        if (chosen) {
+          placed.push(chosen);
+        }
+        if (chosenIndex > 0) {
+          var markerPt = map.latLngToContainerPoint(mk.getLatLng());
+          var anchor = anchorOnRect(chosen, markerPt.x, markerPt.y);
+          addSchoolLabelLine(markerPt.x, markerPt.y, anchor.x, anchor.y);
+        }
+      });
+    }
+    var schoolLabelLayoutTimer = null;
+    function scheduleSchoolLabelLayout() {
+      if (schoolLabelLayoutTimer) {
+        window.clearTimeout(schoolLabelLayoutTimer);
+      }
+      schoolLabelLayoutTimer = window.setTimeout(function () {
+        schoolLabelLayoutTimer = null;
+        layoutSchoolLabels();
+        window.requestAnimationFrame(function () {
+          layoutSchoolLabels();
+        });
+      }, 70);
+    }
+    map.on('zoomend', scheduleSchoolLabelLayout);
+    map.on('moveend', scheduleSchoolLabelLayout);
+    map.on('resize', function () {
+      resizeSchoolLabelLinks();
+      scheduleSchoolLabelLayout();
+    });
+
+    const g = L.featureGroup(layers);
+    function schoolLabelFitBoundsOpts(extra) {
+      var o = extra || {};
+      return Object.assign({
+        paddingTopLeft: L.point(8, 44),
+        paddingBottomRight: L.point(8, 38)
+      }, o);
+    }
+    map.fitBounds(maxBounds, schoolLabelFitBoundsOpts());
+    scheduleSchoolLabelLayout();
+    var baseNote = (BASEMAP.provider === 'naver')
+      ? '배경: 네이버 일반지도'
+      : (BASEMAP.provider === 'vworld' && BASEMAP.key)
+      ? '배경: 브이월드(한글)'
+      : '배경: OSM(지역명 한글 우선)';
+    document.getElementById('meta').textContent =
+      '학교 ' + GEO.features.length + '곳 · ' + baseNote
+      + ' · 지도 범위: 남한 전체 · 학교: 엑셀';
+
+    var SAVE_SCALE = 3;
+    function pad2(n) { return (n < 10 ? '0' : '') + n; }
+    function makeFileName() {
+      var d = new Date();
+      return 'gangneung-school-map-'
+        + d.getFullYear() + pad2(d.getMonth() + 1) + pad2(d.getDate())
+        + '-' + pad2(d.getHours()) + pad2(d.getMinutes())
+        + '.png';
+    }
+    function downloadPng(dataUrl) {
+      var a = document.createElement('a');
+      a.href = dataUrl;
+      a.download = makeFileName();
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+    function canvasToPng(canvas) {
+      var url = canvas.toDataURL('image/png');
+      if (!url || url.length < 32) {
+        throw new Error('empty png');
+      }
+      return url;
+    }
+    function captureMapShell(opts) {
+      var shell = document.querySelector('.map-shell');
+      if (!shell || typeof html2canvas !== 'function') {
+        return Promise.reject(new Error('no html2canvas'));
+      }
+      var hi = (opts.scale && opts.scale > 1) ? opts.scale : 1;
+      var innerOpts = {};
+      var k;
+      for (k in opts) {
+        if (Object.prototype.hasOwnProperty.call(opts, k)) {
+          innerOpts[k] = opts[k];
+        }
+      }
+      innerOpts.scale = 1;
+      return html2canvas(shell, innerOpts).then(function (canvas) {
+        if (hi <= 1) {
+          return canvasToPng(canvas);
+        }
+        var out = document.createElement('canvas');
+        out.width = Math.round(canvas.width * hi);
+        out.height = Math.round(canvas.height * hi);
+        var ctx = out.getContext('2d');
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(
+          canvas,
+          0, 0, canvas.width, canvas.height,
+          0, 0, out.width, out.height
+        );
+        return canvasToPng(out);
+      });
+    }
+    function applyRailZoomForPngCapture() {
+      var inner = document.querySelector('.school-name-rail-inner');
+      var wrap = document.querySelector('.school-name-rail');
+      if (!inner || !wrap) {
+        return function () {};
+      }
+      inner.style.transform = '';
+      inner.style.transformOrigin = '';
+      var availH = Math.max(48, wrap.clientHeight);
+      var availW = Math.max(80, wrap.clientWidth);
+      var needH = inner.scrollHeight;
+      var needW = inner.scrollWidth;
+      var zr = 1;
+      if (needH > availH) {
+        zr = Math.min(zr, (availH / needH) * 0.98);
+      }
+      if (needW > availW) {
+        zr = Math.min(zr, (availW / needW) * 0.98);
+      }
+      zr = Math.max(0.4, Math.min(1, zr));
+      if (zr < 1) {
+        inner.style.transformOrigin = 'top right';
+        inner.style.transform = 'scale(' + zr + ')';
+      }
+      return function () {
+        inner.style.transform = '';
+        inner.style.transformOrigin = '';
+      };
+    }
+    document.getElementById('btnSavePng').addEventListener('click', function () {
+      var btn = this;
+      if (btn.disabled) {
+        return;
+      }
+      btn.disabled = true;
+      var prevText = btn.textContent;
+      btn.textContent = '저장 중…';
+      var shell = document.querySelector('.map-shell');
+      var rbSW = map.getBounds().getSouthWest();
+      var rbNE = map.getBounds().getNorthEast();
+      function restoreMapViewAfterPng() {
+        map.fitBounds(L.latLngBounds(rbSW, rbNE), { animate: false });
+        if (!maxBounds.contains(map.getBounds())) {
+          map.fitBounds(maxBounds, schoolLabelFitBoundsOpts({ animate: false }));
+        }
+        map.invalidateSize(false);
+        scheduleSchoolLabelLayout();
+      }
+      var base = {
+        scale: SAVE_SCALE,
+        logging: false,
+        useCORS: true,
+        allowTaint: false,
+        backgroundColor: null,
+        imageTimeout: 25000,
+        scrollX: 0,
+        scrollY: 0
+      };
+      window.setTimeout(function () {
+        map.fitBounds(g.getBounds().pad(0.1), schoolLabelFitBoundsOpts({ animate: false }));
+        if (!maxBounds.contains(map.getBounds())) {
+          map.fitBounds(maxBounds, schoolLabelFitBoundsOpts({ animate: false }));
+        }
+        map.invalidateSize(false);
+        window.setTimeout(function () {
+          if (shell) {
+            shell.classList.add('map-shell--png-capture');
+          }
+          var restoreRailZoom = applyRailZoomForPngCapture();
+          map.invalidateSize(false);
+          layoutSchoolLabels();
+          window.requestAnimationFrame(function () {
+            layoutSchoolLabels();
+            window.requestAnimationFrame(function () {
+              layoutSchoolLabels();
+              captureMapShell(base)
+            .catch(function () {
+              return captureMapShell({
+                scale: SAVE_SCALE,
+                logging: false,
+                useCORS: false,
+                allowTaint: false,
+                backgroundColor: '#c7d2e0',
+                imageTimeout: 25000,
+                scrollX: 0,
+                scrollY: 0,
+                ignoreElements: function (el) {
+                  return el.classList && el.classList.contains('leaflet-tile-pane');
+                }
+              });
+            })
+            .then(function (dataUrl) {
+              downloadPng(dataUrl);
+            })
+            .catch(function () {
+              window.alert(
+                '이미지를 저장하지 못했습니다.\n'
+                + '브라우저에서 화면 캡처를 사용하거나, 페이지를 인쇄(PDF)해 보세요.'
+              );
+            })
+            .finally(function () {
+              if (shell) {
+                shell.classList.remove('map-shell--png-capture');
+              }
+              restoreRailZoom();
+              restoreMapViewAfterPng();
+              btn.disabled = false;
+              btn.textContent = prevText;
+            });
+            });
+          });
+        }, 650);
+      }, 120);
+    });
+  })();
+  </script>
+</body>
+</html>
