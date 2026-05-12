@@ -1141,7 +1141,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     const map = L.map('map', {
       maxBounds: maxBounds,
       maxBoundsViscosity: 1.0,
-      preferCanvas: true
+      preferCanvas: true,
+      wheelPxPerZoomLevel: 150
     });
     var tilePane = map.getPanes().tilePane;
     if (tilePane && BASEMAP.provider !== 'naver') {
