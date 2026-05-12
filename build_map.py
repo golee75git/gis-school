@@ -370,6 +370,15 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       text-transform: uppercase;
       color: #6366f1;
     }
+    .panel-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .panel-head-main {
+      min-width: 0;
+    }
     .panel h1 {
       margin: 0 0 10px;
       font-size: 18px;
@@ -377,6 +386,40 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       letter-spacing: -0.04em;
       color: var(--ink);
       line-height: 1.2;
+    }
+    .panel-minimize {
+      flex-shrink: 0;
+      width: 32px;
+      height: 32px;
+      margin-top: 2px;
+      border: 1px solid rgba(148, 163, 184, 0.28);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.9);
+      color: var(--ink-muted);
+      font-family: inherit;
+      font-size: 18px;
+      line-height: 1;
+      cursor: pointer;
+      transition: background 0.16s ease, color 0.16s ease, border-color 0.16s ease;
+    }
+    .panel-minimize:hover {
+      color: var(--ink-soft);
+      background: #fff;
+      border-color: rgba(99, 102, 241, 0.35);
+    }
+    .panel--collapsed {
+      padding: 10px 14px;
+      cursor: pointer;
+    }
+    .panel--collapsed .panel-body {
+      display: none;
+    }
+    .panel--collapsed .panel-head-main .panel-kicker {
+      margin-bottom: 0;
+    }
+    .panel--collapsed .panel-head-main h1 {
+      margin: 0;
+      font-size: 14px;
     }
     .panel p { margin: 0; color: var(--ink-muted); line-height: 1.6; font-size: 12px; font-weight: 400; }
     .region-filter {
@@ -620,6 +663,58 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     .school-name-rail-resize:active {
       cursor: nwse-resize;
     }
+    .school-name-rail-minimize {
+      position: absolute;
+      top: 0;
+      right: 0;
+      z-index: 3;
+      width: calc(28px * var(--rail-scale, 1));
+      height: calc(24px * var(--rail-scale, 1));
+      margin: 0;
+      padding: 0;
+      border: none;
+      border-radius: 0 var(--radius-lg) 0 0;
+      background: rgba(255, 255, 255, 0.72);
+      color: var(--ink-muted);
+      font-family: inherit;
+      font-size: calc(16px * var(--rail-scale, 1));
+      line-height: 1;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    .school-name-rail-minimize:hover {
+      color: var(--ink-soft);
+      background: rgba(255, 255, 255, 0.92);
+    }
+    .school-name-rail--collapsed {
+      bottom: auto !important;
+      width: auto !important;
+      height: auto !important;
+      min-width: 0;
+      max-height: none;
+    }
+    .school-name-rail--collapsed.school-name-rail--sized {
+      width: auto !important;
+      height: auto !important;
+    }
+    .school-name-rail--collapsed .school-name-rail-inner,
+    .school-name-rail--collapsed .school-name-rail-resize {
+      display: none;
+    }
+    .school-name-rail--collapsed .school-name-rail-drag {
+      position: relative;
+      justify-content: flex-start;
+      width: auto;
+      min-width: calc(104px * var(--rail-scale, 1));
+      padding: 0 calc(34px * var(--rail-scale, 1)) 0 calc(10px * var(--rail-scale, 1));
+      border-radius: var(--radius-lg);
+    }
+    .school-name-rail--collapsed .school-name-rail-drag::before {
+      display: none;
+    }
+    .school-name-rail-drag-label {
+      pointer-events: none;
+    }
     .sn-section { margin-bottom: calc(14px * var(--rail-scale, 1)); }
     .sn-section:last-child { margin-bottom: 0; }
     .sn-h {
@@ -751,8 +846,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <body>
   <div class="map-shell">
     <div id="map"></div>
-    <aside class="school-name-rail" aria-label="학교명 목록">
-      <button type="button" class="school-name-rail-drag" aria-label="학교명 목록 이동" title="드래그하여 이동">이동</button>
+    <aside class="school-name-rail" id="schoolListRail" aria-label="학교명 목록">
+      <button type="button" class="school-name-rail-drag" aria-label="학교명 목록 이동" title="드래그하여 이동"><span class="school-name-rail-drag-label">이동</span></button>
+      <button type="button" class="school-name-rail-minimize" id="btnMinimizeRail" aria-expanded="true" aria-label="학교명 목록 접기" title="목록 접기">-</button>
       <div class="school-name-rail-inner">
         <section class="sn-section sn-kinder">
           <h2 class="sn-h">유치원</h2>
@@ -778,9 +874,15 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       <button type="button" class="school-name-rail-resize" aria-label="학교명 목록 크기 조절" title="드래그하여 크기 조절"></button>
     </aside>
   </div>
-  <div class="panel">
-    <p class="panel-kicker">전국 학교 지도</p>
-    <h1>전국 학교 위치</h1>
+  <div class="panel" id="searchPanel">
+    <div class="panel-head">
+      <div class="panel-head-main">
+        <p class="panel-kicker">전국 학교 지도</p>
+        <h1>전국 학교 위치</h1>
+      </div>
+      <button type="button" class="panel-minimize" id="btnMinimizePanel" aria-expanded="true" aria-label="전국 학교 위치 패널 접기" title="패널 접기">-</button>
+    </div>
+    <div class="panel-body" id="panelBody">
     <p id="meta"></p>
     <div class="region-filter">
       <label class="region-field" for="filterSido">시도교육청
@@ -804,6 +906,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       <button type="button" class="btn-save" id="btnSavePng" title="지도 영역을 고해상도 PNG로 저장합니다">
         이미지 저장 (고해상도)
       </button>
+    </div>
     </div>
   </div>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" crossorigin="anonymous"></script>
@@ -1614,6 +1717,76 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     initRegionFilters();
     updateMeta(0, '', '');
     fillSchoolNameRail([]);
+
+    function initOverlayCollapse() {
+      var panel = document.getElementById('searchPanel');
+      var panelBtn = document.getElementById('btnMinimizePanel');
+      var rail = document.getElementById('schoolListRail');
+      var railBtn = document.getElementById('btnMinimizeRail');
+      var railDragLabel = rail && rail.querySelector('.school-name-rail-drag-label');
+      function notifyMapLayout() {
+        window.requestAnimationFrame(function () {
+          map.invalidateSize({ animate: false });
+          scheduleSchoolLabelLayout();
+        });
+      }
+      function setPanelCollapsed(collapsed) {
+        if (!panel || !panelBtn) {
+          return;
+        }
+        panel.classList.toggle('panel--collapsed', collapsed);
+        panelBtn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+        panelBtn.textContent = collapsed ? '+' : '-';
+        panelBtn.setAttribute(
+          'aria-label',
+          collapsed ? '전국 학교 위치 패널 펼치기' : '전국 학교 위치 패널 접기'
+        );
+        panelBtn.title = collapsed ? '패널 펼치기' : '패널 접기';
+        notifyMapLayout();
+      }
+      function setRailCollapsed(collapsed) {
+        if (!rail || !railBtn) {
+          return;
+        }
+        rail.classList.toggle('school-name-rail--collapsed', collapsed);
+        railBtn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+        railBtn.textContent = collapsed ? '+' : '-';
+        railBtn.setAttribute(
+          'aria-label',
+          collapsed ? '학교명 목록 펼치기' : '학교명 목록 접기'
+        );
+        railBtn.title = collapsed ? '목록 펼치기' : '목록 접기';
+        if (railDragLabel) {
+          railDragLabel.textContent = collapsed ? '학교 목록' : '이동';
+        }
+        notifyMapLayout();
+      }
+      if (panelBtn) {
+        panelBtn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          setPanelCollapsed(!panel.classList.contains('panel--collapsed'));
+        });
+      }
+      if (panel) {
+        panel.addEventListener('click', function (e) {
+          if (!panel.classList.contains('panel--collapsed')) {
+            return;
+          }
+          if (panelBtn && (e.target === panelBtn || panelBtn.contains(e.target))) {
+            return;
+          }
+          setPanelCollapsed(false);
+        });
+      }
+      if (railBtn) {
+        railBtn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          e.preventDefault();
+          setRailCollapsed(!rail.classList.contains('school-name-rail--collapsed'));
+        });
+      }
+    }
+    initOverlayCollapse();
 
     var SAVE_SCALE = 3;
     function pad2(n) { return (n < 10 ? '0' : '') + n; }
