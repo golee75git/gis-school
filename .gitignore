@@ -1,3 +1,4 @@
 vworld_api_key.txt
 .bkit/
 ~$*.xlsx
+__pycache__/

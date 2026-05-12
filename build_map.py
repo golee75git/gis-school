@@ -119,12 +119,47 @@ def south_korea_map_bounds(_fc: dict | None = None) -> list[list[float]]:
     return [list(SOUTH_KOREA_SW), list(SOUTH_KOREA_NE)]
 
 
+def initial_view_bounds(fc: dict | None = None) -> list[list[float]]:
+    features = (fc or {}).get("features") or []
+    if not features:
+        return south_korea_map_bounds(fc)
+    lons = [f["geometry"]["coordinates"][0] for f in features]
+    lats = [f["geometry"]["coordinates"][1] for f in features]
+    min_lat, max_lat = min(lats), max(lats)
+    min_lon, max_lon = min(lons), max(lons)
+    lat_span = max(0.01, max_lat - min_lat)
+    lon_span = max(0.01, max_lon - min_lon)
+    pad_lat = max(0.12, lat_span * 0.06)
+    pad_lon = max(0.12, lon_span * 0.06)
+    sw = [
+        max(SOUTH_KOREA_SW[0], min_lat - pad_lat),
+        max(SOUTH_KOREA_SW[1], min_lon - pad_lon),
+    ]
+    ne = [
+        min(SOUTH_KOREA_NE[0], max_lat + pad_lat),
+        min(SOUTH_KOREA_NE[1], max_lon + pad_lon),
+    ]
+    return [sw, ne]
+
+
+def build_region_index(fc: dict) -> dict[str, list[str]]:
+    index: dict[str, set[str]] = {}
+    for feature in fc.get("features") or []:
+        props = feature.get("properties") or {}
+        sido = str(props.get("시도교육청명") or "").strip()
+        office = str(props.get("교육지원청명") or "").strip()
+        if not sido or not office:
+            continue
+        index.setdefault(sido, set()).add(office)
+    return {sido: sorted(offices) for sido, offices in sorted(index.items())}
+
+
 HTML_TEMPLATE = """<!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>강릉시 학교 위치</title>
+  <title>전국 학교 위치</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -322,6 +357,50 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       line-height: 1.2;
     }
     .panel p { margin: 0; color: var(--ink-muted); line-height: 1.6; font-size: 12px; font-weight: 400; }
+    .region-filter {
+      margin-top: 12px;
+      display: grid;
+      gap: 8px;
+    }
+    .region-field {
+      display: grid;
+      gap: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--ink-soft);
+    }
+    .region-field input {
+      width: 100%;
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      border-radius: var(--radius-md);
+      padding: 8px 10px;
+      font-family: inherit;
+      font-size: 12px;
+      color: var(--ink);
+      background: rgba(255, 255, 255, 0.9);
+    }
+    .region-field input:focus {
+      outline: none;
+      border-color: rgba(99, 102, 241, 0.55);
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.14);
+    }
+    .btn-region {
+      width: 100%;
+      cursor: pointer;
+      border: none;
+      border-radius: var(--radius-md);
+      padding: 9px 12px;
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 700;
+      color: #fff;
+      background: linear-gradient(135deg, #4f46e5 0%, #6366f1 55%, #0d9488 100%);
+      box-shadow: 0 6px 18px rgba(79, 70, 229, 0.24);
+    }
+    .btn-region:disabled {
+      cursor: wait;
+      opacity: 0.72;
+    }
     .legend {
       margin-top: 14px;
       display: flex; flex-wrap: wrap;
@@ -678,9 +757,20 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     </aside>
   </div>
   <div class="panel">
-    <p class="panel-kicker">강릉 교육기관</p>
-    <h1>강릉시 학교 위치</h1>
+    <p class="panel-kicker">전국 학교 지도</p>
+    <h1>전국 학교 위치</h1>
     <p id="meta"></p>
+    <div class="region-filter">
+      <label class="region-field" for="filterSido">시도교육청
+        <input id="filterSido" list="sidoOptions" type="search" placeholder="시도교육청 검색" autocomplete="off" />
+        <datalist id="sidoOptions"></datalist>
+      </label>
+      <label class="region-field" for="filterOffice">지역교육청
+        <input id="filterOffice" list="officeOptions" type="search" placeholder="교육지원청 검색" autocomplete="off" />
+        <datalist id="officeOptions"></datalist>
+      </label>
+      <button type="button" class="btn-region" id="btnApplyRegion">지역 조회</button>
+    </div>
     <div class="legend">
       <span class="lg"><i class="dot" style="background:#f97316"></i>유치원</span>
       <span class="lg"><i class="dot" style="background:#5b6eef"></i>초등</span>
@@ -700,6 +790,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   <script>
   const GEO = __GEOJSON__;
   const MAP_BOUNDS = __MAP_BOUNDS__;
+  const INITIAL_VIEW_BOUNDS = __INITIAL_VIEW_BOUNDS__;
+  const REGION_INDEX = __REGION_INDEX__;
+  const REGION_TOTAL = __REGION_TOTAL__;
   const BASEMAP = __BASEMAP__;
   function escapeHtml(s) {
     return String(s)
@@ -735,14 +828,43 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     else if (s.indexOf('특수학교') !== -1) s = s.replace('특수학교', '특');
     return s;
   }
-  function fillSchoolNameRail() {
+  function fillSchoolNameRail(features) {
+    const list = features || [];
+    const RAIL_LIST_LIMIT = 400;
+    if (!list.length) {
+      ['sn-list-kinder', 'sn-list-elm', 'sn-list-mid', 'sn-list-high', 'sn-list-special']
+        .forEach(function (id) {
+          const el = document.getElementById(id);
+          if (el) {
+            el.innerHTML = '';
+          }
+        });
+      return;
+    }
+    if (list.length > RAIL_LIST_LIMIT) {
+      const note = '선택 지역 ' + list.length + '개 학교 · 목록은 확대 후 지도에서 확인';
+      ['sn-list-kinder', 'sn-list-elm', 'sn-list-mid', 'sn-list-high', 'sn-list-special']
+        .forEach(function (id) {
+          const el = document.getElementById(id);
+          if (!el) {
+            return;
+          }
+          if (id === 'sn-list-elm') {
+            el.innerHTML = '<span class="sn-chip" title="' + escapeHtml(note) + '">'
+              + escapeHtml(note) + '</span>';
+          } else {
+            el.innerHTML = '';
+          }
+        });
+      return;
+    }
     const kinder = [];
     const elm = [];
     const mid = [];
     const high = [];
     const special = [];
-    for (let i = 0; i < GEO.features.length; i++) {
-      const p = GEO.features[i].properties || {};
+    for (let i = 0; i < list.length; i++) {
+      const p = list[i].properties || {};
       const tier = schoolTierFromGrade(p['학교급구분'] || '');
       const n = String(p['학교명'] || '').trim();
       if (!n) {
@@ -989,7 +1111,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     });
   }
   (function () {
-    fillSchoolNameRail();
+    var cachedGeoFeatures = null;
+    var currentFeatureGroup = L.featureGroup();
+    var schoolMarkers = [];
     initSchoolRailPanel(document.querySelector('.map-shell'));
     const maxBounds = L.latLngBounds(MAP_BOUNDS[0], MAP_BOUNDS[1]);
     const map = L.map('map', {
@@ -1033,49 +1157,205 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       };
     }
     L.tileLayer(tileUrl, tileOpts).addTo(map);
+    currentFeatureGroup.addTo(map);
 
-    const schoolMarkers = [];
-    const layers = [];
-    for (const f of GEO.features) {
-      const [lon, lat] = f.geometry.coordinates;
-      const p = f.properties || {};
-      const fullName = p['학교명'] || '';
-      const label = shortSchoolName(fullName);
-      const grade = String(p['학교급구분'] || '');
-      const labelTier = schoolTierFromGrade(grade);
-      const color = schoolTierColor(labelTier);
-      const m = L.circleMarker([lat, lon], {
-        radius: 6,
-        weight: 2,
-        color: '#ffffff',
-        fillColor: color,
-        fillOpacity: 0.94
-      });
-      const lines = [
-        '<b>' + fullName + '</b>',
-        p['학교급구분'] || '',
-        (p['소재지도로명주소'] || p['소재지지번주소'] || '')
-      ].filter(Boolean);
-      m.bindPopup(lines.join('<br/>'), {
-        className: 'school-popup-card',
-        maxWidth: 280
-      });
-      if (label) {
-        m.bindTooltip(label, {
-          permanent: true,
-          direction: 'center',
-          offset: L.point(0, -12),
-          className: 'school-label school-label-' + labelTier,
-          opacity: 1,
-          interactive: false
-        });
-        schoolMarkers.push(m);
+    function loadAllFeatures() {
+      if (cachedGeoFeatures) {
+        return Promise.resolve(cachedGeoFeatures);
       }
-      m.addTo(map);
-      layers.push(m);
+      if (GEO && GEO.features) {
+        cachedGeoFeatures = GEO.features;
+        return Promise.resolve(cachedGeoFeatures);
+      }
+      if (window.location.protocol === 'file:') {
+        return Promise.reject(new Error('embedded geo missing'));
+      }
+      return fetch('schools.geojson', { cache: 'no-store' })
+        .then(function (resp) {
+          if (!resp.ok) {
+            throw new Error('geojson load failed');
+          }
+          return resp.json();
+        })
+        .then(function (fc) {
+          cachedGeoFeatures = (fc && fc.features) ? fc.features : [];
+          return cachedGeoFeatures;
+        });
+    }
+    function resolveChoice(raw, options) {
+      var value = String(raw || '').trim();
+      if (!value) {
+        return '';
+      }
+      if (options.indexOf(value) !== -1) {
+        return value;
+      }
+      var matches = options.filter(function (item) {
+        return item.indexOf(value) !== -1;
+      });
+      return matches.length === 1 ? matches[0] : '';
+    }
+    function setDatalistOptions(datalistId, options) {
+      var datalist = document.getElementById(datalistId);
+      if (!datalist) {
+        return;
+      }
+      datalist.innerHTML = options.map(function (item) {
+        return '<option value="' + escapeHtml(item) + '"></option>';
+      }).join('');
+    }
+    function updateOfficeOptions() {
+      var sidoInput = document.getElementById('filterSido');
+      var sido = resolveChoice(sidoInput && sidoInput.value, Object.keys(REGION_INDEX));
+      setDatalistOptions('officeOptions', REGION_INDEX[sido] || []);
+    }
+    function updateMeta(filteredCount, sido, office) {
+      var baseNote = (BASEMAP.provider === 'naver')
+        ? '배경: 네이버 일반지도'
+        : (BASEMAP.provider === 'vworld' && BASEMAP.key)
+        ? '배경: 브이월드(한글)'
+        : '배경: OSM(지역명 한글 우선)';
+      var scope = '';
+      if (sido && office) {
+        scope = sido + ' · ' + office;
+      } else if (sido) {
+        scope = sido;
+      } else {
+        scope = '전국 ' + REGION_TOTAL + '곳 중 지역 미선택';
+      }
+      document.getElementById('meta').textContent =
+        scope + ' · 학교 ' + filteredCount + '곳 · ' + baseNote + ' · 학교: 엑셀';
+    }
+    function clearSchoolLayers() {
+      currentFeatureGroup.clearLayers();
+      schoolMarkers.length = 0;
+      scheduleSchoolLabelLayout();
+    }
+    function renderSchoolFeatures(features) {
+      clearSchoolLayers();
+      if (!features.length) {
+        fillSchoolNameRail([]);
+        return;
+      }
+      var layers = [];
+      for (var idx = 0; idx < features.length; idx++) {
+        var f = features[idx];
+        var coords = f.geometry.coordinates;
+        var lon = coords[0];
+        var lat = coords[1];
+        var p = f.properties || {};
+        var fullName = p['학교명'] || '';
+        var label = shortSchoolName(fullName);
+        var grade = String(p['학교급구분'] || '');
+        var labelTier = schoolTierFromGrade(grade);
+        var color = schoolTierColor(labelTier);
+        var m = L.circleMarker([lat, lon], {
+          radius: 6,
+          weight: 2,
+          color: '#ffffff',
+          fillColor: color,
+          fillOpacity: 0.94
+        });
+        var lines = [
+          '<b>' + fullName + '</b>',
+          p['학교급구분'] || '',
+          (p['소재지도로명주소'] || p['소재지지번주소'] || '')
+        ].filter(Boolean);
+        m.bindPopup(lines.join('<br/>'), {
+          className: 'school-popup-card',
+          maxWidth: 280
+        });
+        if (label) {
+          m.bindTooltip(label, {
+            permanent: true,
+            direction: 'center',
+            offset: L.point(0, -12),
+            className: 'school-label school-label-' + labelTier,
+            opacity: 1,
+            interactive: false
+          });
+          schoolMarkers.push(m);
+        }
+        currentFeatureGroup.addLayer(m);
+        layers.push(m);
+      }
+      fillSchoolNameRail(features);
+      var boundsGroup = L.featureGroup(layers);
+      map.fitBounds(boundsGroup.getBounds().pad(0.08), schoolLabelFitBoundsOpts());
+      scheduleSchoolLabelLayout();
+    }
+    function applyRegionFilter() {
+      var btn = document.getElementById('btnApplyRegion');
+      var sidoInput = document.getElementById('filterSido');
+      var officeInput = document.getElementById('filterOffice');
+      var sidoKeys = Object.keys(REGION_INDEX);
+      var sido = resolveChoice(sidoInput && sidoInput.value, sidoKeys);
+      var offices = REGION_INDEX[sido] || [];
+      var office = resolveChoice(officeInput && officeInput.value, offices);
+      if (!sido) {
+        updateMeta(0, '', '');
+        window.alert('시도교육청을 선택하거나 검색해 주세요.');
+        return;
+      }
+      if (!office) {
+        updateMeta(0, sido, '');
+        window.alert('지역교육청(교육지원청)을 선택하거나 검색해 주세요.');
+        return;
+      }
+      if (btn) {
+        btn.disabled = true;
+      }
+      loadAllFeatures()
+        .then(function (features) {
+          var filtered = features.filter(function (feature) {
+            var props = feature.properties || {};
+            return String(props['시도교육청명'] || '').trim() === sido
+              && String(props['교육지원청명'] || '').trim() === office;
+          });
+          renderSchoolFeatures(filtered);
+          updateMeta(filtered.length, sido, office);
+        })
+        .catch(function () {
+          window.alert(
+            '학교 데이터를 불러오지 못했습니다.\\n'
+            + 'build_map.py를 실행해 map.html을 다시 만든 뒤, map.html을 열어 주세요.'
+          );
+        })
+        .finally(function () {
+          if (btn) {
+            btn.disabled = false;
+          }
+        });
+    }
+    function initRegionFilters() {
+      setDatalistOptions('sidoOptions', Object.keys(REGION_INDEX));
+      setDatalistOptions('officeOptions', []);
+      var sidoInput = document.getElementById('filterSido');
+      var officeInput = document.getElementById('filterOffice');
+      var applyBtn = document.getElementById('btnApplyRegion');
+      if (sidoInput) {
+        sidoInput.addEventListener('input', updateOfficeOptions);
+        sidoInput.addEventListener('change', updateOfficeOptions);
+        sidoInput.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter') {
+            applyRegionFilter();
+          }
+        });
+      }
+      if (officeInput) {
+        officeInput.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter') {
+            applyRegionFilter();
+          }
+        });
+      }
+      if (applyBtn) {
+        applyBtn.addEventListener('click', applyRegionFilter);
+      }
     }
 
     const ZOOM_LABELS_CENTER = 15;
+    const ZOOM_LABELS_MIN = 8;
     const ZOOM_LABEL_FONT_MIN = 10;
     function schoolLabelFontSizePx(z) {
       if (z >= ZOOM_LABELS_CENTER) {
@@ -1172,6 +1452,23 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         a.top - pad > b.bottom
       );
     }
+    function setSchoolLabelVisibility(visible) {
+      schoolMarkers.forEach(function (mk) {
+        var tip = mk.getTooltip();
+        if (!tip) {
+          return;
+        }
+        var el = tip.getElement();
+        if (!el) {
+          return;
+        }
+        el.style.display = visible ? '' : 'none';
+        el.style.fontSize = '';
+        el.style.padding = '';
+        el.style.opacity = '';
+        el.style.visibility = '';
+      });
+    }
     function layoutSchoolLabels() {
       if (!schoolMarkers.length) {
         clearSchoolLabelLines();
@@ -1181,6 +1478,12 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       clearSchoolLabelLines();
       var z = map.getZoom();
       applySchoolLabelZoomTypography(z);
+      if (z < ZOOM_LABELS_MIN) {
+        setSchoolLabelVisibility(false);
+        return;
+      }
+      setSchoolLabelVisibility(true);
+      var viewBounds = map.getBounds().pad(0.35);
       var sorted = schoolMarkers.slice().sort(function (a, b) {
         var pa = map.latLngToContainerPoint(a.getLatLng());
         var pb = map.latLngToContainerPoint(b.getLatLng());
@@ -1188,6 +1491,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
           return pa.y - pb.y;
         }
         return pa.x - pb.x;
+      }).filter(function (mk) {
+        return viewBounds.contains(mk.getLatLng());
       });
       var placed = [];
       var pad = 2;
@@ -1271,7 +1576,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       scheduleSchoolLabelLayout();
     });
 
-    const g = L.featureGroup(layers);
     function schoolLabelFitBoundsOpts(extra) {
       var o = extra || {};
       return Object.assign({
@@ -1279,16 +1583,14 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         paddingBottomRight: L.point(8, 38)
       }, o);
     }
-    map.fitBounds(maxBounds, schoolLabelFitBoundsOpts());
-    scheduleSchoolLabelLayout();
-    var baseNote = (BASEMAP.provider === 'naver')
-      ? '배경: 네이버 일반지도'
-      : (BASEMAP.provider === 'vworld' && BASEMAP.key)
-      ? '배경: 브이월드(한글)'
-      : '배경: OSM(지역명 한글 우선)';
-    document.getElementById('meta').textContent =
-      '학교 ' + GEO.features.length + '곳 · ' + baseNote
-      + ' · 지도 범위: 남한 전체 · 학교: 엑셀';
+    const initialViewBounds = L.latLngBounds(
+      INITIAL_VIEW_BOUNDS[0],
+      INITIAL_VIEW_BOUNDS[1]
+    );
+    map.fitBounds(initialViewBounds, schoolLabelFitBoundsOpts());
+    initRegionFilters();
+    updateMeta(0, '', '');
+    fillSchoolNameRail([]);
 
     var SAVE_SCALE = 3;
     function pad2(n) { return (n < 10 ? '0' : '') + n; }
@@ -1405,7 +1707,12 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         scrollY: 0
       };
       window.setTimeout(function () {
-        map.fitBounds(g.getBounds().pad(0.1), schoolLabelFitBoundsOpts({ animate: false }));
+        if (currentFeatureGroup.getLayers().length) {
+          map.fitBounds(
+            currentFeatureGroup.getBounds().pad(0.1),
+            schoolLabelFitBoundsOpts({ animate: false })
+          );
+        }
         if (!maxBounds.contains(map.getBounds())) {
           map.fitBounds(maxBounds, schoolLabelFitBoundsOpts({ animate: false }));
         }
@@ -1474,13 +1781,21 @@ def main() -> None:
     out_geo.write_text(json.dumps(fc, ensure_ascii=False, indent=2), encoding="utf-8")
 
     geo_js = json.dumps(fc, ensure_ascii=False)
+    region_index = build_region_index(fc)
+    region_index_js = json.dumps(region_index, ensure_ascii=False)
+    region_total_js = str(len(fc["features"]))
     bounds = south_korea_map_bounds(fc)
     bounds_js = json.dumps(bounds)
+    initial_bounds = initial_view_bounds(fc)
+    initial_bounds_js = json.dumps(initial_bounds)
     basemap = resolve_basemap()
     basemap_js = json.dumps(basemap, ensure_ascii=False)
     html = (
         HTML_TEMPLATE.replace("__GEOJSON__", geo_js)
         .replace("__MAP_BOUNDS__", bounds_js)
+        .replace("__INITIAL_VIEW_BOUNDS__", initial_bounds_js)
+        .replace("__REGION_INDEX__", region_index_js)
+        .replace("__REGION_TOTAL__", region_total_js)
         .replace("__BASEMAP__", basemap_js)
     )
     (ROOT / "map.html").write_text(html, encoding="utf-8")
